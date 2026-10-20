@@ -5,6 +5,8 @@ import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Rect
+import android.graphics.Typeface
+import android.graphics.drawable.RippleDrawable
 import android.text.TextUtils
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
@@ -17,6 +19,7 @@ import kotlin.math.abs
 import dev.zhanqu.app.core.OverlayPlacement
 import dev.zhanqu.app.core.CaptureControlPolicy
 import dev.zhanqu.app.core.CompactOverlayPolicy
+import dev.zhanqu.app.core.OverlayPresentationPolicy
 
 /** Single accessibility-owned, non-focusable window. No SYSTEM_ALERT_WINDOW permission. */
 internal class CaptureOverlay(
@@ -44,9 +47,9 @@ internal class CaptureOverlay(
     private var counts: TextView? = null
     private var badge: TextView? = null
     private var bar: ProgressBar? = null
-    private var pauseButton: ImageButton? = null
-    private var stopButton: ImageButton? = null
-    private var startButton: ImageButton? = null
+    private var pauseButton: View? = null
+    private var stopButton: View? = null
+    private var startButton: View? = null
     private var selection = CompactOverlayPolicy.Selection()
     private val images get() = selection.images
     private val comments get() = selection.comments
@@ -81,15 +84,19 @@ internal class CaptureOverlay(
         badge?.setTextColor(if (latest.error != null) Color.rgb(160, 75, 40) else green)
         entryButton?.contentDescription = "粘取，$status${if (latest.error != null) "，有异常" else ""}，轻点展开，拖动移动"
         entryButton?.setColorFilter(if (latest.error != null) Color.rgb(255, 191, 113) else Color.WHITE)
+        root?.takeIf { !expanded }?.background = rounded(Color.argb(OverlayPresentationPolicy.entryOpacity(latest.running, latest.error != null), 39, 47, 48), 19)
         infoButton?.setColorFilter(if (latest.error != null) Color.rgb(160, 75, 40) else muted)
         progress?.text = buildString { append(latest.message); latest.error?.takeIf { it != latest.message }?.let { append("\n$it") } }
         progress?.setTextColor(if (latest.error != null) Color.rgb(153, 71, 41) else muted)
-        counts?.text = "${latest.pagesCaptured}/${latest.reportedPages ?: "—"} · ${latest.commentsCaptured}"
+        counts?.text = OverlayPresentationPolicy.counts(latest.pagesCaptured, latest.reportedPages, latest.commentsCaptured)
         counts?.contentDescription = "已采图页${latest.pagesCaptured}，共${latest.reportedPages ?: "未知"}页，评论${latest.commentsCaptured}条"
         pauseButton?.apply {
             contentDescription = if (latest.paused) "继续采集" else "暂停采集"
             tooltipText = contentDescription
-            setImageDrawable(OverlayIcon(if (latest.paused) "play" else "pause", Color.WHITE))
+            when (this) {
+                is ImageButton -> setImageDrawable(OverlayIcon(if (latest.paused) "play" else "pause", Color.WHITE))
+                is TextView -> { text = if (latest.paused) "继续" else "暂停"; setCompoundDrawables(glyph(if (latest.paused) "play" else "pause", Color.WHITE), null, null, null) }
+            }
         }
         pauseButton?.isEnabled = CaptureControlPolicy.canControl(latest.running, latest.stage); stopButton?.isEnabled = CaptureControlPolicy.canControl(latest.running, latest.stage)
         startButton?.isEnabled = CaptureControlPolicy.canStart(latest.running, images, comments)
@@ -110,12 +117,32 @@ internal class CaptureOverlay(
         background = rounded(if (primary) green else Color.TRANSPARENT, 16)
         setOnClickListener { click() }
     }
-    private fun toggleIcon(name: String, description: String, checked: Boolean, click: () -> Unit) = icon(name, description, false, click).apply {
-        isSelected = checked
-        background = rounded(if (checked) Color.rgb(222, 239, 231) else Color.rgb(238, 241, 238), 16)
-        setColorFilter(if (checked) green else muted)
-        stateDescription = if (checked) "已开启" else "已关闭"
-        contentDescription = "$description，${if (checked) "已开启" else "已关闭"}"
+    private fun glyph(name: String, color: Int) = OverlayIcon(name, color).apply { setBounds(0, 0, dp(20), dp(20)) }
+    /** One accessible target includes both the glyph and its label. */
+    private fun action(name: String, title: String, description: String = title, primary: Boolean = false,
+                       vertical: Boolean = false, checked: Boolean? = null, click: () -> Unit) = TextView(service).apply {
+        text = title; textSize = if (vertical) 12f else 14f
+        gravity = Gravity.CENTER; typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        val foreground = if (primary) Color.WHITE else if (checked == false) muted else green
+        setTextColor(foreground)
+        minimumHeight = dp(if (vertical) 64 else CompactOverlayPolicy.TOUCH_TARGET_DP)
+        minimumWidth = dp(CompactOverlayPolicy.TOUCH_TARGET_DP)
+        setPadding(dp(8), dp(8), dp(8), dp(8)); compoundDrawablePadding = dp(4)
+        if (vertical) setCompoundDrawables(null, glyph(name, foreground), null, null)
+        else setCompoundDrawables(glyph(name, foreground), null, null, null)
+        val fill = if (primary) green else if (checked == true) Color.rgb(222, 239, 231) else Color.TRANSPARENT
+        background = RippleDrawable(ColorStateList.valueOf(Color.argb(35, 26, 105, 84)), rounded(fill, 16), rounded(Color.WHITE, 16))
+        isClickable = true; isFocusable = true
+        contentDescription = description; tooltipText = description
+        checked?.let { isSelected = it; stateDescription = if (it) "已开启" else "已关闭" }
+        accessibilityDelegate = object : View.AccessibilityDelegate() {
+            override fun onInitializeAccessibilityNodeInfo(host: View, info: android.view.accessibility.AccessibilityNodeInfo) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                info.className = if (checked != null) "android.widget.ToggleButton" else "android.widget.Button"
+                if (checked != null) { info.isCheckable = true; info.isChecked = checked }
+            }
+        }
+        setOnClickListener { click() }
     }
     private fun column() = LinearLayout(service).apply { orientation = LinearLayout.VERTICAL }
     private fun row() = LinearLayout(service).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
@@ -141,7 +168,8 @@ internal class CaptureOverlay(
         }.also { root = it }
         wrappedContent = null
         panel.removeAllViews()
-        panel.background = rounded(if (expanded) cream else Color.argb(230, 39, 47, 48), if (expanded) 26 else 19)
+        panel.background = rounded(if (expanded) cream else Color.argb(OverlayPresentationPolicy.entryOpacity(latest.running, latest.error != null), 39, 47, 48), if (expanded) 26 else 19)
+        panel.elevation = dp(if (expanded) 10 else 3).toFloat()
         panel.setPadding(dp(if (expanded) 8 else 4), dp(if (expanded) 4 else 4), dp(if (expanded) 8 else 4), dp(if (expanded) 8 else 4))
         if (!expanded) {
             val entry = icon("entry", "粘取，轻点展开，拖动移动") { show(true) }
@@ -163,7 +191,7 @@ internal class CaptureOverlay(
                 minimumHeight = dp(48); contentDescription = "拖动移动悬浮窗，轻点收起"
             }
             attachDrag(handle); header.addView(handle, LinearLayout.LayoutParams(0, dp(48), 1f))
-            infoButton = icon("info", "状态与诊断详情") { detailsExpanded = !detailsExpanded; render() }
+            infoButton = icon("info", "查看状态") { detailsExpanded = !detailsExpanded; render() }
             header.addView(infoButton, LinearLayout.LayoutParams(dp(48), dp(48)))
             header.addView(icon("collapse", "收起") { show(false) }, LinearLayout.LayoutParams(dp(48), dp(48)))
             panel.addView(header)
@@ -182,25 +210,31 @@ internal class CaptureOverlay(
             }
             if (!latest.running) {
                 val options = row()
-                options.addView(toggleIcon("image", "图文和离线OCR", images) { selection = selection.toggleImages(); render() }, LinearLayout.LayoutParams(0, dp(48), 1f))
-                options.addView(toggleIcon("comment", "采集评论", comments) { selection = selection.toggleComments(); render() }, LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(6); rightMargin = dp(6) })
-                options.addView(toggleIcon("reply", "展开楼中楼回复", replies) { selection = selection.toggleReplies(); render() }, LinearLayout.LayoutParams(0, dp(48), 1f))
+                options.addView(action("image", "图文", "提取图文", vertical = true, checked = images) { selection = selection.toggleImages(); render() }, LinearLayout.LayoutParams(0, -2, 1f))
+                options.addView(action("comment", "评论", "提取评论", vertical = true, checked = comments) { selection = selection.toggleComments(); render() }, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(6); rightMargin = dp(6) })
+                options.addView(action("reply", "回复", "包含评论回复", vertical = true, checked = replies) { selection = selection.toggleReplies(); render() }, LinearLayout.LayoutParams(0, -2, 1f))
                 body.addView(options)
             }
             panel.addView(ScrollView(service).apply { addView(body) }, LinearLayout.LayoutParams(-1, -2))
-            val actions = row()
             if (latest.running) {
-                pauseButton = icon(if (latest.paused) "play" else "pause", "暂停或继续采集", true) { togglePause() }
-                stopButton = icon("stop", "结束并保存") { if (CaptureControlPolicy.canControl(latest.running, latest.stage)) stop() }
-                actions.addView(pauseButton, LinearLayout.LayoutParams(0, dp(48), 1f))
-                actions.addView(stopButton, LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(6) })
+                val actions = row()
+                pauseButton = action(if (latest.paused) "play" else "pause", if (latest.paused) "继续" else "暂停", primary = true) { togglePause() }
+                stopButton = action("stop", "完成", "结束并保存") { if (CaptureControlPolicy.canControl(latest.running, latest.stage)) stop() }
+                actions.addView(pauseButton, LinearLayout.LayoutParams(0, -2, 1f))
+                actions.addView(stopButton, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(6) })
+                panel.addSpaced(actions)
             } else {
-                startButton = icon("play", "开始提取", true) { if (CaptureControlPolicy.canStart(latest.running, images, comments)) { show(false); start(CaptureOptions(images, comments, replies)) } }
-                actions.addView(startButton, LinearLayout.LayoutParams(0, dp(48), 1f))
-                actions.addView(icon("library", "打开笔记库") { openResults() }, LinearLayout.LayoutParams(0, dp(48), 1f))
-                actions.addView(icon("close", "隐藏悬浮入口") { hide() }, LinearLayout.LayoutParams(0, dp(48), 1f))
+                startButton = action("play", "提取", "开始提取", primary = true) {
+                    if (CaptureControlPolicy.canStart(latest.running, images, comments)) {
+                        show(false); start(CaptureOptions(images, comments, replies))
+                    }
+                }
+                val actions = row()
+                actions.addView(startButton, LinearLayout.LayoutParams(0, -2, 1f))
+                actions.addView(icon("library", "打开笔记库") { openResults() }, LinearLayout.LayoutParams(dp(48), dp(48)))
+                actions.addView(icon("close", "隐藏悬浮入口") { hide() }, LinearLayout.LayoutParams(dp(48), dp(48)))
+                panel.addSpaced(actions)
             }
-            panel.addSpaced(actions)
         }
         updateLabels()
         val viewport = WindowSafety.contentViewport(service)

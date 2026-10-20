@@ -24,6 +24,11 @@ internal class OverlayIcon(private val name: String, color: Int) : Drawable() {
         fun line(x: Float, y: Float, a: Float, b: Float) = canvas.drawLine(x, y, a, b, paint)
         fun path(vararg points: Float) { val p = Path(); p.moveTo(points[0], points[1]); for (i in 2 until points.size step 2) p.lineTo(points[i], points[i + 1]); canvas.drawPath(p, paint) }
         when (name) {
+            "entry" -> {
+                path(8f, 4f, 4f, 4f, 4f, 8f); path(16f, 4f, 20f, 4f, 20f, 8f)
+                path(4f, 16f, 4f, 20f, 8f, 20f); path(20f, 16f, 20f, 20f, 16f, 20f)
+                line(9f, 9f, 15f, 9f); line(9f, 12f, 15f, 12f); line(9f, 15f, 13f, 15f)
+            }
             "play" -> path(9f, 5f, 19f, 12f, 9f, 19f, 9f, 5f)
             "pause" -> { line(9f, 6f, 9f, 18f); line(15f, 6f, 15f, 18f) }
             "stop" -> canvas.drawRoundRect(6f, 6f, 18f, 18f, 2f, 2f, paint)

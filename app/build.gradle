@@ -14,8 +14,8 @@ android {
   manifestPlaceholders = [appLabel: previewBuild ? '粘取预览' : '粘取', accessibilityLabel: previewBuild ? '粘取预览页面采集' : '粘取页面采集']
   minSdk 30
   targetSdk 35
-  versionCode 8
-  versionName '0.2.3'
+  versionCode 9
+  versionName '0.3.0'
   ndk { abiFilters(*((project.findProperty('zhanquAbis') ?: 'arm64-v8a').toString().split(','))) }
   testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
  }
