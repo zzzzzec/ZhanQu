@@ -25,6 +25,8 @@ class ZhanQuAccessibilityService : AccessibilityService() {
     private lateinit var overlay: CaptureOverlay
     private var runner: CaptureSessionRunner? = null
     private var captureJob: Job? = null
+    private var snapshotJob: Job? = null
+    private var snapshotWindowEpoch = 0L
     private var currentActivity: String? = null
     private var targetPackage: String? = null
     private var ownActionUntil = 0L
@@ -32,14 +34,14 @@ class ZhanQuAccessibilityService : AccessibilityService() {
     private var receiverRegistered = false
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == Intent.ACTION_SCREEN_OFF) pauseCapture("屏幕已关闭，请解锁并回到原页面后手动继续")
+            if (intent?.action == Intent.ACTION_SCREEN_OFF) { snapshotJob?.cancel(); pauseCapture("屏幕已关闭，请解锁并回到原页面后手动继续") }
         }
     }
     override fun onServiceConnected() {
         super.onServiceConnected()
         CaptureHub.service = this
         reader = UiTreeReader(this) { currentActivity }
-        overlay = CaptureOverlay(this, ::startCapture, { pauseCapture("用户暂停") }, ::resumeCapture, ::stopCapture, ::openResults)
+        overlay = CaptureOverlay(this, ::startCapture, { pauseCapture("用户暂停") }, ::resumeCapture, ::stopCapture, ::openResults, ::exportPageSnapshot)
         configureEvents(false)
         CaptureHub.mutableState.value = CaptureUiState(connected = true, message = "打开小红书图文详情页，再在悬浮入口点击开始")
         scope.launch { CaptureHub.state.collect { overlay.update(it) } }
@@ -70,7 +72,7 @@ class ZhanQuAccessibilityService : AccessibilityService() {
     fun hideControls() { if (::overlay.isInitialized) overlay.hide() }
     private fun markOwnAction() { ownActionUntil = SystemClock.uptimeMillis() + 1300L }
     private fun startCapture(options: CaptureOptions) {
-        if (captureJob?.let { !it.isCompleted } == true || (!options.images && !options.comments)) return
+        if (snapshotJob?.let { !it.isCompleted } == true || captureJob?.let { !it.isCompleted } == true || (!options.images && !options.comments)) return
         if (!getSharedPreferences("privacy", Context.MODE_PRIVATE).getBoolean("disclosure", false)) {
             CaptureHub.mutableState.value = CaptureUiState(connected = true, message = "请先在粘取首页阅读并同意无障碍用途与隐私说明")
             openResults()
@@ -94,6 +96,47 @@ class ZhanQuAccessibilityService : AccessibilityService() {
             finally { runner = null; targetPackage = null; if (!destroyed) configureEvents(false) }
         }
     }
+    private fun exportPageSnapshot() {
+        if (destroyed || captureJob?.let { !it.isCompleted } == true || snapshotJob?.let { !it.isCompleted } == true) return
+        if (!getSharedPreferences("privacy", Context.MODE_PRIVATE).getBoolean("disclosure", false)) {
+            android.widget.Toast.makeText(this, "请先在粘取首页同意无障碍用途与隐私说明", android.widget.Toast.LENGTH_LONG).show()
+            openResults(); return
+        }
+        snapshotJob = scope.launch {
+            val previous = CaptureHub.mutableState.value
+            CaptureHub.mutableState.value = previous.copy(snapshotting = true, message = "正在生成页面快照", error = null)
+            configureEvents(true)
+            // Establish the epoch before the exporter yields; only our own overlay events are ignored.
+            var epoch: Long? = null
+            try {
+                val file = PageSnapshotExporter(this@ZhanQuAccessibilityService) { overlay.temporarilyHide(it) }.capture {
+                    if (destroyed) throw CancellationException("Service destroyed")
+                    val expected = epoch
+                    if (expected == null) epoch = snapshotWindowEpoch
+                    else if (expected != snapshotWindowEpoch) throw CaptureFailure("页面发生切换，请稳定后重试")
+                }
+                CaptureHub.mutableState.value = previous.copy(message = "页面快照已保存在本机", error = null)
+                startActivity(Intent(this@ZhanQuAccessibilityService, dev.zhanqu.app.PageSnapshotActivity::class.java)
+                    .putExtra("snapshotFile", file.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (e: TimeoutCancellationException) {
+                if (!destroyed) {
+                    CaptureHub.mutableState.value = previous.copy(message = "生成页面快照超时，请重试", error = "生成超时")
+                    android.widget.Toast.makeText(this@ZhanQuAccessibilityService, "生成页面快照超时，请重试", android.widget.Toast.LENGTH_LONG).show()
+                }
+            } catch (e: CancellationException) {
+                if (!destroyed) CaptureHub.mutableState.value = previous.copy(message = "页面快照已取消")
+                throw e
+            } catch (e: Exception) {
+                if (!destroyed) {
+                    val message = e.message ?: "页面快照生成失败，请重试"
+                    CaptureHub.mutableState.value = previous.copy(message = message, error = message)
+                    android.widget.Toast.makeText(this@ZhanQuAccessibilityService, message, android.widget.Toast.LENGTH_LONG).show()
+                }
+            } finally {
+                if (!destroyed) { configureEvents(false); CaptureHub.mutableState.value = CaptureHub.mutableState.value.copy(snapshotting = false) }
+            }
+        }
+    }
     fun pauseCapture(reason: String) { if (captureJob?.isActive == true) runner?.pause(reason) }
     fun resumeCapture() {
         if (captureJob?.isActive != true) return
@@ -113,6 +156,8 @@ class ZhanQuAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
         val pkg = event.packageName?.toString()
+        if (snapshotJob?.isActive == true && event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg != packageName)
+            snapshotWindowEpoch++
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg == "com.xingin.xhs") {
             val className = event.className?.toString()
             if (className?.endsWith("Activity") == true) currentActivity = className
@@ -132,9 +177,10 @@ class ZhanQuAccessibilityService : AccessibilityService() {
             pauseCapture("检测到非采集操作，已暂停；确认页面后手动继续")
         }
     }
-    override fun onInterrupt() { pauseCapture("系统中断了无障碍服务，请确认页面后继续") }
+    override fun onInterrupt() { snapshotJob?.cancel(); pauseCapture("系统中断了无障碍服务，请确认页面后继续") }
     override fun onDestroy() {
         destroyed = true
+        snapshotJob?.cancel()
         captureJob?.cancel()
         if (::overlay.isInitialized) overlay.hide()
         if (receiverRegistered) unregisterReceiver(screenReceiver)

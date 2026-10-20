@@ -28,7 +28,8 @@ internal class CaptureOverlay(
     private val pause: () -> Unit,
     private val resume: () -> Unit,
     private val stop: () -> Unit,
-    private val openResults: () -> Unit
+    private val openResults: () -> Unit,
+    private val exportSnapshot: () -> Unit = {}
 ) {
     private val windows = service.getSystemService(WindowManager::class.java)
     private var root: LinearLayout? = null
@@ -50,6 +51,7 @@ internal class CaptureOverlay(
     private var pauseButton: View? = null
     private var stopButton: View? = null
     private var startButton: View? = null
+    private var snapshotButton: View? = null
     private var selection = CompactOverlayPolicy.Selection()
     private val images get() = selection.images
     private val comments get() = selection.comments
@@ -99,8 +101,9 @@ internal class CaptureOverlay(
             }
         }
         pauseButton?.isEnabled = CaptureControlPolicy.canControl(latest.running, latest.stage); stopButton?.isEnabled = CaptureControlPolicy.canControl(latest.running, latest.stage)
-        startButton?.isEnabled = CaptureControlPolicy.canStart(latest.running, images, comments)
-        listOfNotNull(startButton, pauseButton, stopButton).forEach { it.alpha = if (it.isEnabled) 1f else 0.45f }
+        snapshotButton?.isEnabled = !latest.running && !latest.snapshotting
+        startButton?.isEnabled = !latest.snapshotting && CaptureControlPolicy.canStart(latest.running, images, comments)
+        listOfNotNull(startButton, snapshotButton, pauseButton, stopButton).forEach { it.alpha = if (it.isEnabled) 1f else 0.45f }
         bar?.apply {
             val total = latest.reportedPages
             isIndeterminate = latest.running && !latest.paused && (total == null || total <= 0)
@@ -147,7 +150,7 @@ internal class CaptureOverlay(
     private fun column() = LinearLayout(service).apply { orientation = LinearLayout.VERTICAL }
     private fun row() = LinearLayout(service).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
     private fun LinearLayout.addSpaced(view: View) { addView(view, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) }) }
-    private fun clearReferences() { progress = null; counts = null; badge = null; bar = null; pauseButton = null; stopButton = null; startButton = null; infoButton = null; entryButton = null }
+    private fun clearReferences() { progress = null; counts = null; badge = null; bar = null; pauseButton = null; stopButton = null; startButton = null; snapshotButton = null; infoButton = null; entryButton = null }
     private fun render() {
         // Keep the touched view and its gesture origin stable until UP/CANCEL.
         if (dragActive) { renderPending = true; return }
@@ -225,7 +228,7 @@ internal class CaptureOverlay(
                 panel.addSpaced(actions)
             } else {
                 startButton = action("play", "提取", "开始提取", primary = true) {
-                    if (CaptureControlPolicy.canStart(latest.running, images, comments)) {
+                    if (!latest.snapshotting && CaptureControlPolicy.canStart(latest.running, images, comments)) {
                         show(false); start(CaptureOptions(images, comments, replies))
                     }
                 }
@@ -234,6 +237,10 @@ internal class CaptureOverlay(
                 actions.addView(icon("library", "打开笔记库") { openResults() }, LinearLayout.LayoutParams(dp(48), dp(48)))
                 actions.addView(icon("close", "隐藏悬浮入口") { hide() }, LinearLayout.LayoutParams(dp(48), dp(48)))
                 panel.addSpaced(actions)
+                snapshotButton = action("snapshot", "页面快照", "导出当前页面截图和节点 ZIP") {
+                    if (!latest.running && !latest.snapshotting) exportSnapshot()
+                }
+                panel.addSpaced(snapshotButton!!)
             }
         }
         updateLabels()

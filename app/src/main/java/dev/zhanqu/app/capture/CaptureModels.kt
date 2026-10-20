@@ -17,7 +17,8 @@ data class CapturedNote(
 data class CaptureUiState(
     val connected: Boolean = false, val running: Boolean = false, val paused: Boolean = false,
     val stage: String = "idle", val message: String = "请先启用粘取无障碍服务", val pagesCaptured: Int = 0,
-    val reportedPages: Int? = null, val commentsCaptured: Int = 0, val error: String? = null
+    val reportedPages: Int? = null, val commentsCaptured: Int = 0, val error: String? = null,
+    val snapshotting: Boolean = false
 )
 
 /** No content is read until a user presses Start in the service overlay. */

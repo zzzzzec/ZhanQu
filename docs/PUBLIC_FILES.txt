@@ -4,6 +4,7 @@ README.md
 app/build.gradle
 app/src/main/AndroidManifest.xml
 app/src/main/java/dev/zhanqu/app/MainActivity.kt
+app/src/main/java/dev/zhanqu/app/PageSnapshotActivity.kt
 app/src/main/java/dev/zhanqu/app/capture/CaptureModels.kt
 app/src/main/java/dev/zhanqu/app/capture/CaptureOverlay.kt
 app/src/main/java/dev/zhanqu/app/capture/CapturePersistence.kt
@@ -13,6 +14,7 @@ app/src/main/java/dev/zhanqu/app/capture/LocalImageOcr.kt
 app/src/main/java/dev/zhanqu/app/capture/MlKitChineseEngine.kt
 app/src/main/java/dev/zhanqu/app/capture/OcrModels.kt
 app/src/main/java/dev/zhanqu/app/capture/OverlayIcon.kt
+app/src/main/java/dev/zhanqu/app/capture/PageSnapshotExporter.kt
 app/src/main/java/dev/zhanqu/app/capture/ScreenshotProvider.kt
 app/src/main/java/dev/zhanqu/app/capture/UiTreeReader.kt
 app/src/main/java/dev/zhanqu/app/capture/WindowSafety.kt
@@ -28,6 +30,7 @@ app/src/main/java/dev/zhanqu/app/core/GkdSnapshotImporter.kt
 app/src/main/java/dev/zhanqu/app/core/OcrLayoutProcessor.kt
 app/src/main/java/dev/zhanqu/app/core/OverlayPlacement.kt
 app/src/main/java/dev/zhanqu/app/core/OverlayPresentationPolicy.kt
+app/src/main/java/dev/zhanqu/app/core/PageSnapshotArchive.kt
 app/src/main/java/dev/zhanqu/app/core/PeripheralTapPolicy.kt
 app/src/main/java/dev/zhanqu/app/core/SwipePlan.kt
 app/src/main/java/dev/zhanqu/app/core/UiModels.kt
@@ -38,6 +41,7 @@ app/src/main/res/drawable/ic_launcher.xml
 app/src/main/res/values/strings.xml
 app/src/main/res/xml/backup_rules.xml
 app/src/main/res/xml/data_extraction_rules.xml
+app/src/main/res/xml/page_snapshot_paths.xml
 app/src/main/res/xml/zhanqu_accessibility_service.xml
 app/src/test/java/dev/zhanqu/app/core/CaptureControlPolicyTest.kt
 app/src/test/java/dev/zhanqu/app/core/CommentEntryPlannerTest.kt
@@ -47,6 +51,7 @@ app/src/test/java/dev/zhanqu/app/core/GkdSnapshotImporterTest.kt
 app/src/test/java/dev/zhanqu/app/core/OcrLayoutProcessorTest.kt
 app/src/test/java/dev/zhanqu/app/core/OverlayPlacementTest.kt
 app/src/test/java/dev/zhanqu/app/core/OverlayPresentationPolicyTest.kt
+app/src/test/java/dev/zhanqu/app/core/PageSnapshotArchiveTest.kt
 app/src/test/java/dev/zhanqu/app/core/PeripheralTapPolicyTest.kt
 app/src/test/java/dev/zhanqu/app/core/WindowOcclusionPolicyTest.kt
 app/src/test/java/dev/zhanqu/app/export/NoteExporterTest.kt
@@ -55,6 +60,7 @@ build.gradle
 docs/APACHE-2.0.txt
 docs/ARCHITECTURE.md
 docs/DEPENDENCIES.md
+docs/PAGE_SNAPSHOT.md
 docs/PRIVACY.md
 docs/PROFILE_SPEC.md
 docs/PUBLICATION.md
@@ -66,12 +72,14 @@ docs/RELEASE_0.2.0.md
 docs/RELEASE_0.2.2.md
 docs/RELEASE_0.2.3.md
 docs/RELEASE_0.3.0.md
+docs/RELEASE_0.3.1.md
 docs/TEST_PLAN.md
 docs/TEST_REPORT.md
 docs/images/note-editor.png
 docs/images/overlay-compact.png
 docs/images/overlay-menu.png
 docs/images/overlay-running.png
+docs/images/page-snapshot-review.png
 docs/images/workbench.png
 gradle.properties
 gradle/wrapper/gradle-wrapper.jar

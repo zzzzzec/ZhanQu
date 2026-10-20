@@ -29,6 +29,7 @@ internal class OverlayIcon(private val name: String, color: Int) : Drawable() {
                 path(4f, 16f, 4f, 20f, 8f, 20f); path(20f, 16f, 20f, 20f, 16f, 20f)
                 line(9f, 9f, 15f, 9f); line(9f, 12f, 15f, 12f); line(9f, 15f, 13f, 15f)
             }
+            "snapshot" -> { canvas.drawRoundRect(3f, 6f, 21f, 20f, 2f, 2f, paint); path(7f, 6f, 9f, 3f, 15f, 3f, 17f, 6f); canvas.drawCircle(12f, 13f, 4f, paint) }
             "play" -> path(9f, 5f, 19f, 12f, 9f, 19f, 9f, 5f)
             "pause" -> { line(9f, 6f, 9f, 18f); line(15f, 6f, 15f, 18f) }
             "stop" -> canvas.drawRoundRect(6f, 6f, 18f, 18f, 2f, 2f, paint)

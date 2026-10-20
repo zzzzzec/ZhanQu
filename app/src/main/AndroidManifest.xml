@@ -5,6 +5,10 @@
   <activity android:name=".MainActivity" android:exported="true">
    <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
   </activity>
+  <activity android:name=".PageSnapshotActivity" android:exported="false"/>
+  <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.pageSnapshots" android:exported="false" android:grantUriPermissions="true">
+   <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/page_snapshot_paths"/>
+  </provider>
   <service android:name=".capture.ZhanQuAccessibilityService" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true" android:label="${accessibilityLabel}">
    <intent-filter><action android:name="android.accessibilityservice.AccessibilityService"/></intent-filter>
    <meta-data android:name="android.accessibilityservice" android:resource="@xml/zhanqu_accessibility_service"/>

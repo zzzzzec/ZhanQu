@@ -149,7 +149,7 @@ class MainActivity : ComponentActivity() {
      item {
       if(!consent) SectionCard {
        Text("开启页面采集",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold)
-       Text("开启无障碍权限后，粘取会在您点击开始时读取当前页面文字与图像，并自动翻页、滚动和展开回复。",style=MaterialTheme.typography.bodyMedium)
+       Text("开启无障碍权限后，粘取会在您点击开始时读取当前页面文字与图像，并自动翻页、滚动和展开回复。页面快照只读取您当前打开的页面，不翻页、不点击。",style=MaterialTheme.typography.bodyMedium)
        Text("内容在本机处理，仅在您分享或导出时离开设备。无障碍权限可能接触敏感信息，请仅在您愿意采集的页面启动。",style=MaterialTheme.typography.bodyMedium)
        Text("粘取是个人内容整理工具，不是面向残障人士的辅助工具。",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
        Button(modifier=Modifier.fillMaxWidth().heightIn(min=52.dp),onClick={consent=true;getSharedPreferences("privacy",MODE_PRIVATE).edit().putBoolean("disclosure",true).apply()}) { Text("同意并继续") }
@@ -169,7 +169,7 @@ class MainActivity : ComponentActivity() {
          OutlinedButton(modifier=Modifier.weight(1f),enabled=state.stage!="stopping",onClick={CaptureHub.stop()}) { Text(if(state.stage=="stopping") "正在保存…" else "结束并保存") }
         }
        } else {
-        Text(if(state.connected) "在小红书图文笔记中，用悬浮按钮开始。" else "连接无障碍服务，即可从页面采集。",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(if(state.connected) "在小红书图文笔记中，用悬浮按钮开始；其他应用可导出页面快照。" else "连接无障碍服务，即可从页面采集。",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
         Button(modifier=Modifier.fillMaxWidth().heightIn(min=52.dp),onClick={if(state.connected) { CaptureHub.showControls(); message="悬浮入口已打开，前往想保存的笔记" } else startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))}) { Text(if(state.connected) "打开悬浮采集" else "连接无障碍服务") }
         state.error?.let { Text(it,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.error) }
        }
@@ -256,6 +256,7 @@ class MainActivity : ComponentActivity() {
    catch(e: Exception) { clearDialog=false;message="清空失败，请重试" }
   }}) { Text("删除全部",color=MaterialTheme.colorScheme.error) }},dismissButton={TextButton(onClick={clearDialog=false}) { Text("取消") }})
   if(help) AlertDialog(onDismissRequest={help=false},title={Text("使用粘取")},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+   HelpItem("页面快照","在任意应用的目标页面打开悬浮入口，点击页面快照，生成截图与节点 ZIP 后自行保存或分享；不会自动上传。受保护页面、密码区域和遮挡窗口不会导出。")
    HelpItem("采集页面","连接无障碍服务，打开悬浮入口，再前往小红书图文笔记。选择内容后点击开始。采集结果会自动保存。")
    HelpItem("暂停与继续","切换页面或锁屏会暂停采集。您也可以随时暂停，或结束并保存已有内容。")
    HelpItem("整理与导出","点开笔记可修改文字，保存后保留您的校正。复制、分享和导出使用当前正文；JSON 另含原始识别结果。识别文字可在这里核对。")

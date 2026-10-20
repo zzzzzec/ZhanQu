@@ -138,7 +138,9 @@ object GkdSnapshotImporter {
             bounds = parseBounds(attr),
             clickable = attr.optBoolean("clickable", false), scrollable = attr.optBoolean("scrollable", false),
             visible = attr.optBoolean("visibleToUser", attr.optBoolean("visible", true)),
-            password = sensitive, children = children
+            password = sensitive, children = children, focusable = attr.optBoolean("focusable", false),
+            checkable = attr.optBoolean("checkable", false), checked = if (attr.isNull("checked")) null else attr.optBoolean("checked"),
+            editable = attr.optBoolean("editable", false), longClickable = attr.optBoolean("longClickable", false)
         )
     }
 

@@ -42,7 +42,9 @@ internal class UiTreeReader(private val service: AccessibilityService, private v
         return try { root.packageName?.toString() } finally { @Suppress("DEPRECATION") root.recycle() }
     }
 
-    fun read(expectedPackage: String): LiveScreen {
+    fun read(expectedPackage: String, maxReadMillis: Long = 0): LiveScreen {
+        val deadline = if (maxReadMillis > 0) android.os.SystemClock.uptimeMillis() + maxReadMillis else Long.MAX_VALUE
+        var textChars = 0L
         if (!service.getSystemService(android.os.PowerManager::class.java).isInteractive ||
             service.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked)
             throw CaptureFailure("屏幕已锁定或关闭，请解锁并回到原页面后手动继续")
@@ -55,10 +57,18 @@ internal class UiTreeReader(private val service: AccessibilityService, private v
             (service.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager).defaultDisplay.getRealMetrics(metrics)
             var count = 0
             fun copy(node: AccessibilityNodeInfo, path: String, depth: Int): UiNode {
+                if (android.os.SystemClock.uptimeMillis() > deadline) throw CaptureFailure("读取页面超时，请重试")
                 if (++count > 6000 || depth > 80) throw CaptureFailure("页面节点过多或树层级异常")
+                if (maxReadMillis > 0) {
+                    textChars += (node.text?.length ?: 0).toLong() + (node.contentDescription?.length ?: 0) +
+                        (node.viewIdResourceName?.length ?: 0) + (node.className?.length ?: 0)
+                    if (textChars > 1_000_000) throw CaptureFailure("页面文字过多，快照大小超限")
+                }
                 val rect = Rect().also(node::getBoundsInScreen)
                 val children = mutableListOf<UiNode>()
+                if (node.childCount > 6000) throw CaptureFailure("页面子节点数量超限")
                 for (index in 0 until node.childCount) {
+                    if (android.os.SystemClock.uptimeMillis() > deadline) throw CaptureFailure("读取页面超时，请重试")
                     val child = node.getChild(index) ?: continue
                     try { children += copy(child, "$path/$index", depth + 1) }
                     finally { @Suppress("DEPRECATION") child.recycle() }
@@ -66,7 +76,9 @@ internal class UiTreeReader(private val service: AccessibilityService, private v
                 return UiNode(path = path, viewId = node.viewIdResourceName, className = node.className?.toString(),
                     text = if (node.isPassword) null else node.text?.toString(), description = if (node.isPassword) null else node.contentDescription?.toString(),
                     bounds = UiBounds(rect.left, rect.top, rect.right, rect.bottom), clickable = node.isClickable,
-                    scrollable = node.isScrollable, visible = node.isVisibleToUser, password = node.isPassword, children = children)
+                    scrollable = node.isScrollable, visible = node.isVisibleToUser, password = node.isPassword, children = children, focusable = node.isFocusable,
+                    checkable = node.isCheckable, checked = if (node.isCheckable) node.isChecked else null,
+                    editable = node.isEditable, longClickable = node.isLongClickable)
             }
             val copied = copy(root, "0", 0)
             if (copied.anyNode { it.password }) throw CaptureFailure("检测到密码输入区域，不采集此页面")
