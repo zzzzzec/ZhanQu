@@ -1,0 +1,9 @@
+ZhanQu private development deliverable
+
+This source is provided to the requesting user for their project. No public
+open-source license has been selected for the original application code.
+Choose an appropriate license before public publication.
+
+Third-party build and runtime dependencies retain their own licenses and
+terms. See docs/DEPENDENCIES.md. No GKD, AutoX, or OpenRing source code is
+included in this project. User-provided private snapshots are excluded.
