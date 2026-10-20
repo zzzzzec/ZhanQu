@@ -264,7 +264,7 @@ internal class CaptureSessionRunner(
                     val fresh = profile.find(screen.snapshot, profile.commentFlow.expandLocator).firstOrNull { it.path == button.path && it.text == button.text } ?: continue
                     val actionNode = replyActionNode(screen.snapshot, fresh)
                     ownAction()
-                    if (actionNode != null && reader.perform(profile.packageName, targetWindow, actionNode, AccessibilityNodeInfo.ACTION_CLICK)) {
+                    if (actionNode != null && click(actionNode, fresh)) {
                         val deadline = SystemClock.elapsedRealtime() + profile.limits.actionTimeoutMs
                         var added = 0
                         while (SystemClock.elapsedRealtime() < deadline && added == 0) {
@@ -325,7 +325,7 @@ internal class CaptureSessionRunner(
                 }
                 is CommentEntryPlanner.Plan.Swipe -> gestures.swipe(plan.region.androidRect(),false,true,targetWindow)
                 is CommentEntryPlanner.Plan.Click -> {
-                    ownAction(); reader.perform(profile.packageName,targetWindow,plan.node,AccessibilityNodeInfo.ACTION_CLICK)
+                    click(plan.node, plan.node)
                 }
                 else -> throw CaptureFailure("未找到可确认的评论入口或笔记滚动区域；请手动进入评论区，现有图文已保留")
             }
@@ -342,6 +342,22 @@ internal class CaptureSessionRunner(
             if (unchanged >= 3) throw CaptureFailure("连续3次进入评论区未发生有效变化，已停止并保留图文；请手动定位评论区")
         }
         throw CaptureFailure("已达到进入评论区的10次滚动上限，保留已完成结果")
+    }
+
+    private suspend fun click(action: UiNode, anchor: UiNode): Boolean {
+        ownAction()
+        return try { reader.perform(profile.packageName, targetWindow, action, AccessibilityNodeInfo.ACTION_CLICK) }
+        catch (obstruction: WindowObstruction) {
+            // perform() threw before dispatching ACTION_CLICK, so no uncertain action is retried.
+            val accepted = gestures.peripheralTap(action.bounds.androidRect(), anchor.bounds.androidRect(), targetWindow) {
+                if (paused.value) false else {
+                    validate(reader.read(profile.packageName))
+                    reader.confirmsTap(profile.packageName, targetWindow, action, anchor)
+                }
+            }
+            if (!accepted) throw obstruction
+            true
+        }
     }
 
     /** A text label may delegate clicks to a nearby container, but never to the whole list or an unrelated row. */

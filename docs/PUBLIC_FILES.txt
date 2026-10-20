@@ -27,6 +27,7 @@ app/src/main/java/dev/zhanqu/app/core/CompactOverlayPolicy.kt
 app/src/main/java/dev/zhanqu/app/core/GkdSnapshotImporter.kt
 app/src/main/java/dev/zhanqu/app/core/OcrLayoutProcessor.kt
 app/src/main/java/dev/zhanqu/app/core/OverlayPlacement.kt
+app/src/main/java/dev/zhanqu/app/core/PeripheralTapPolicy.kt
 app/src/main/java/dev/zhanqu/app/core/SwipePlan.kt
 app/src/main/java/dev/zhanqu/app/core/UiModels.kt
 app/src/main/java/dev/zhanqu/app/core/WindowOcclusionPolicy.kt
@@ -44,6 +45,7 @@ app/src/test/java/dev/zhanqu/app/core/CoreWorkflowTest.kt
 app/src/test/java/dev/zhanqu/app/core/GkdSnapshotImporterTest.kt
 app/src/test/java/dev/zhanqu/app/core/OcrLayoutProcessorTest.kt
 app/src/test/java/dev/zhanqu/app/core/OverlayPlacementTest.kt
+app/src/test/java/dev/zhanqu/app/core/PeripheralTapPolicyTest.kt
 app/src/test/java/dev/zhanqu/app/core/WindowOcclusionPolicyTest.kt
 app/src/test/java/dev/zhanqu/app/export/NoteExporterTest.kt
 app/src/test/resources/fixtures/xhs-192-synthetic.json
@@ -59,6 +61,7 @@ docs/RELEASE_0.1.1.md
 docs/RELEASE_0.1.2.md
 docs/RELEASE_0.1.3.md
 docs/RELEASE_0.2.0.md
+docs/RELEASE_0.2.2.md
 docs/TEST_PLAN.md
 docs/TEST_REPORT.md
 docs/images/overlay-compact.png

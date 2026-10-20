@@ -78,6 +78,38 @@ internal class UiTreeReader(private val service: AccessibilityService, private v
         } finally { @Suppress("DEPRECATION") root.recycle() }
     }
 
+    /** Fresh nodes are checked and recycled before the gesture can suspend. No stale-node fallback. */
+    fun confirmsTap(expectedPackage: String, expectedWindow: Int, action: UiNode, anchor: UiNode): Boolean {
+        if (anchor.path != action.path && !anchor.path.startsWith(action.path + "/")) return false
+        if (!action.bounds.contains(anchor.bounds)) return false
+        if (!service.getSystemService(android.os.PowerManager::class.java).isInteractive ||
+            service.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) return false
+        fun matches(expected: UiNode, clickable: Boolean): Boolean {
+            val root = applicationRoot() ?: return false
+            var node = root
+            try {
+                if (root.packageName?.toString() != expectedPackage || root.windowId != expectedWindow) return false
+                val parts = expected.path.split('/')
+                if (parts.firstOrNull() != "0") return false
+                for (part in parts.drop(1)) {
+                    val index = part.toIntOrNull()?.takeIf { it >= 0 } ?: return false
+                    val child = node.getChild(index) ?: return false
+                    if (node !== root) { @Suppress("DEPRECATION") node.recycle() }
+                    node = child
+                }
+                val bounds = Rect().also(node::getBoundsInScreen)
+                return node.windowId == expectedWindow && node.isVisibleToUser && node.isEnabled && !node.isPassword &&
+                    (!clickable || node.isClickable) && bounds == expected.bounds.androidRect() &&
+                    node.viewIdResourceName == expected.viewId && node.text?.toString() == expected.text &&
+                    node.contentDescription?.toString() == expected.description && node.className?.toString() == expected.className
+            } finally {
+                if (node !== root) { @Suppress("DEPRECATION") node.recycle() }
+                @Suppress("DEPRECATION") root.recycle()
+            }
+        }
+        return matches(action, true) && matches(anchor, false)
+    }
+
     fun perform(expectedPackage: String, expectedWindow: Int, expected: UiNode, action: Int): Boolean {
         val root = applicationRoot() ?: return false
         var node: AccessibilityNodeInfo = root

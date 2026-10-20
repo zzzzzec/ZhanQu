@@ -5,6 +5,7 @@ import android.graphics.Rect
 import android.graphics.Region
 import android.graphics.RegionIterator
 import android.view.accessibility.AccessibilityWindowInfo
+import dev.zhanqu.app.core.PeripheralTapPolicy
 import dev.zhanqu.app.core.UiBounds
 import dev.zhanqu.app.core.WindowOcclusionPolicy
 
@@ -60,6 +61,13 @@ internal object WindowSafety {
     }
     fun visibleArea(service: AccessibilityService, requested: Rect): Rect = Rect(requested).also {
         if (!it.intersect(contentViewport(service)) || it.isEmpty) throw CaptureFailure("目标区域不在可见内容范围内")
+    }
+    /** Narrow fallback for actual touch injection; not a new exemption for semantic node actions. */
+    fun permitsPeripheralTap(service: AccessibilityService, action: Rect, targetWindowId: Int, plan: PeripheralTapPolicy.Plan): Boolean {
+        val content = contentViewport(service)
+        return PeripheralTapPolicy.permits(service.windows.orEmpty().map { descriptor(it, content) }, targetWindowId,
+            UiBounds(action.left, action.top, action.right, action.bottom),
+            UiBounds(content.left, content.top, content.right, content.bottom), plan, service.packageName)
     }
     fun check(service: AccessibilityService, region: Rect, targetWindowId: Int? = null, isolatedTargetCapture: Boolean = false): String {
         val windows = service.windows.orEmpty()
