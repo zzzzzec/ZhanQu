@@ -35,6 +35,7 @@ internal class CaptureOverlay(
     private var infoButton: ImageButton? = null
     private var entryButton: ImageButton? = null
     private var dragActive = false
+    private var renderPending = false
     private var wrappedContent: LinearLayout? = null
     private var hiddenForCapture = false
     private var ownedWindowTitle: String? = null
@@ -51,7 +52,7 @@ internal class CaptureOverlay(
     private val comments get() = selection.comments
     private val replies get() = selection.replies
     private var lastViewport: Rect? = null
-    private var positionX: Int? = null
+    private var dockEdge = OverlayPlacement.Edge.RIGHT
     private var positionY = dp(96)
     private val ink = Color.rgb(28, 47, 45)
     private val muted = Color.rgb(91, 111, 106)
@@ -66,7 +67,7 @@ internal class CaptureOverlay(
     }
     fun show(expand: Boolean = false) { expanded = expand; if (!expand) detailsExpanded = false; render() }
     fun hide() {
-        root?.let { runCatching { windows.removeView(it) } }; root = null; params = null; dragActive = false; wrappedContent = null
+        root?.let { runCatching { windows.removeView(it) } }; root = null; params = null; dragActive = false; renderPending = false; wrappedContent = null
         ownedWindowTitle?.let(WindowSafety::retireOwnOverlay); ownedWindowTitle = null; clearReferences()
     }
     fun temporarilyHide(hidden: Boolean) { registerWindow(); hiddenForCapture = hidden; root?.visibility = if (hidden) View.INVISIBLE else View.VISIBLE }
@@ -121,7 +122,9 @@ internal class CaptureOverlay(
     private fun LinearLayout.addSpaced(view: View) { addView(view, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) }) }
     private fun clearReferences() { progress = null; counts = null; badge = null; bar = null; pauseButton = null; stopButton = null; startButton = null; infoButton = null; entryButton = null }
     private fun render() {
-        dragActive = false
+        // Keep the touched view and its gesture origin stable until UP/CANCEL.
+        if (dragActive) { renderPending = true; return }
+        renderPending = false
         clearReferences()
         val panel = root ?: column().apply {
             elevation = dp(10).toFloat(); background = rounded(cream)
@@ -209,9 +212,13 @@ internal class CaptureOverlay(
             val identity = "ZhanQuOverlay:" + java.util.UUID.randomUUID().toString(); ownedWindowTitle = identity; WindowSafety.registerOwnOverlay(identity)
             params = WindowManager.LayoutParams(width, -2, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSLUCENT).apply { title = identity; gravity = Gravity.TOP or Gravity.LEFT; x = positionX ?: (viewport.right - width - dp(8)); y = positionY.coerceAtLeast(viewport.top + dp(8)) }
+                PixelFormat.TRANSLUCENT).apply { title = identity; gravity = Gravity.TOP or Gravity.LEFT; x = OverlayPlacement.constrain(0, positionY, width, 0, viewport.left, viewport.top, viewport.right, viewport.bottom, dp(8), edge = dockEdge).x; y = positionY.coerceAtLeast(viewport.top + dp(8)) }
             windows.addView(panel, params)
-        } else { existing.width = width; windows.updateViewLayout(panel, existing) }
+        } else {
+            existing.width = width
+            // Use the requested width now; view.width may still describe the previous mode.
+            clampPosition()
+        }
         panel.visibility = if (hiddenForCapture) View.INVISIBLE else View.VISIBLE
         panel.post { if (root === panel) { clampPosition(); registerWindow() } }
     }
@@ -262,10 +269,15 @@ internal class CaptureOverlay(
     private fun togglePause() { if (CaptureControlPolicy.canControl(latest.running, latest.stage)) { if (latest.paused) resume() else pause() } }
     private fun clampPosition(snap: Boolean = false) {
         val view = root ?: return; val layout = params ?: return; val area = WindowSafety.contentViewport(service)
-        val position = OverlayPlacement.constrain(layout.x, layout.y, view.width, view.height,
-            area.left, area.top, area.right, area.bottom, dp(8), snap)
+        val width = layout.width.takeIf { it > 0 } ?: view.width
+        if (snap) dockEdge = OverlayPlacement.nearestEdge(layout.x, width, area.left, area.right, dp(8))
+        val position = OverlayPlacement.constrain(layout.x, layout.y, width, view.height,
+            area.left, area.top, area.right, area.bottom, dp(8), edge = if (dragActive) null else dockEdge)
         layout.x = position.x; layout.y = position.y
-        positionX = layout.x; positionY = layout.y; windows.updateViewLayout(view, layout)
+        positionY = layout.y; windows.updateViewLayout(view, layout)
+    }
+    private fun finishDragLayout() {
+        if (renderPending) render() else { clampPosition(); refitLater() }
     }
     private fun attachDrag(handle: View) {
         var downX = 0f; var downY = 0f; var originX = 0; var originY = 0; var dragging = false
@@ -280,8 +292,8 @@ internal class CaptureOverlay(
                     if (!dragging && (abs(dx) > slop || abs(dy) > slop)) { dragging = true; if (latest.running && !latest.paused) pause() }
                     if (dragging) { layout.x = originX + dx.toInt(); layout.y = originY + dy.toInt(); clampPosition() }; true
                 }
-                MotionEvent.ACTION_UP -> { dragActive = false; if (dragging) clampPosition(true) else view.performClick(); refitLater(); true }
-                MotionEvent.ACTION_CANCEL -> { dragActive = false; if (dragging) clampPosition(true); refitLater(); true }
+                MotionEvent.ACTION_UP -> { dragActive = false; if (dragging) clampPosition(true) else view.performClick(); finishDragLayout(); true }
+                MotionEvent.ACTION_CANCEL -> { dragActive = false; if (dragging) clampPosition(true); finishDragLayout(); true }
                 else -> false
             }
         }
