@@ -1,0 +1,45 @@
+# Local build/tool state
+.gradle/
+.kotlin/
+**/build/
+local.properties
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Signing material, credentials and machine-specific configuration
+*.keystore
+*.jks
+*.p12
+*.pfx
+*.pem
+*.key
+.env
+.env.*
+!.env.example
+key.properties
+keystore.properties
+google-services.json
+
+# Private captures, user records and generated diagnostics
+/private/
+/snapshots/
+/captures/
+/exports/
+/logs/
+/reports/
+*.log
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.hprof
+*.zip
+*.tar
+*.tar.gz
+*.apk
+*.aab
+
+# Publish only reviewed assets. Synthetic JSON fixtures are intentionally tracked.
