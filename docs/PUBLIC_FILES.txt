@@ -12,6 +12,7 @@ app/src/main/java/dev/zhanqu/app/capture/GestureController.kt
 app/src/main/java/dev/zhanqu/app/capture/LocalImageOcr.kt
 app/src/main/java/dev/zhanqu/app/capture/MlKitChineseEngine.kt
 app/src/main/java/dev/zhanqu/app/capture/OcrModels.kt
+app/src/main/java/dev/zhanqu/app/capture/OverlayIcon.kt
 app/src/main/java/dev/zhanqu/app/capture/ScreenshotProvider.kt
 app/src/main/java/dev/zhanqu/app/capture/UiTreeReader.kt
 app/src/main/java/dev/zhanqu/app/capture/WindowSafety.kt
@@ -22,6 +23,7 @@ app/src/main/java/dev/zhanqu/app/core/CaptureProfile.kt
 app/src/main/java/dev/zhanqu/app/core/CarouselTracker.kt
 app/src/main/java/dev/zhanqu/app/core/CommentEntryPlanner.kt
 app/src/main/java/dev/zhanqu/app/core/CommentParser.kt
+app/src/main/java/dev/zhanqu/app/core/CompactOverlayPolicy.kt
 app/src/main/java/dev/zhanqu/app/core/GkdSnapshotImporter.kt
 app/src/main/java/dev/zhanqu/app/core/OcrLayoutProcessor.kt
 app/src/main/java/dev/zhanqu/app/core/OverlayPlacement.kt
@@ -37,6 +39,7 @@ app/src/main/res/xml/data_extraction_rules.xml
 app/src/main/res/xml/zhanqu_accessibility_service.xml
 app/src/test/java/dev/zhanqu/app/core/CaptureControlPolicyTest.kt
 app/src/test/java/dev/zhanqu/app/core/CommentEntryPlannerTest.kt
+app/src/test/java/dev/zhanqu/app/core/CompactOverlayPolicyTest.kt
 app/src/test/java/dev/zhanqu/app/core/CoreWorkflowTest.kt
 app/src/test/java/dev/zhanqu/app/core/GkdSnapshotImporterTest.kt
 app/src/test/java/dev/zhanqu/app/core/OcrLayoutProcessorTest.kt
@@ -59,6 +62,7 @@ docs/RELEASE_0.2.0.md
 docs/TEST_PLAN.md
 docs/TEST_REPORT.md
 docs/images/overlay-compact.png
+docs/images/overlay-menu.png
 docs/images/overlay-running.png
 docs/images/workbench.png
 gradle.properties
