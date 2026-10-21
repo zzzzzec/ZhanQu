@@ -5,12 +5,11 @@ import android.graphics.Rect
 import android.graphics.Region
 import android.graphics.RegionIterator
 import android.view.accessibility.AccessibilityWindowInfo
-import dev.zhanqu.app.core.PeripheralTapPolicy
+import dev.zhanqu.app.core.ForegroundWindowPolicy
 import dev.zhanqu.app.core.UiBounds
 import dev.zhanqu.app.core.WindowOcclusionPolicy
 
 /** Own windows are tracked by a per-view random title plus native window ID, including removal transitions. */
-internal class WindowObstruction(message: String) : CaptureFailure(message)
 
 internal object WindowSafety {
     private data class Owned(val title: String, val ids: MutableSet<Int> = mutableSetOf(), var retired: Boolean = false)
@@ -62,14 +61,7 @@ internal object WindowSafety {
     fun visibleArea(service: AccessibilityService, requested: Rect): Rect = Rect(requested).also {
         if (!it.intersect(contentViewport(service)) || it.isEmpty) throw CaptureFailure("目标区域不在可见内容范围内")
     }
-    /** Narrow fallback for actual touch injection; not a new exemption for semantic node actions. */
-    fun permitsPeripheralTap(service: AccessibilityService, action: Rect, targetWindowId: Int, plan: PeripheralTapPolicy.Plan): Boolean {
-        val content = contentViewport(service)
-        return PeripheralTapPolicy.permits(service.windows.orEmpty().map { descriptor(it, content) }, targetWindowId,
-            UiBounds(action.left, action.top, action.right, action.bottom),
-            UiBounds(content.left, content.top, content.right, content.bottom), plan, service.packageName)
-    }
-    fun check(service: AccessibilityService, region: Rect, targetWindowId: Int? = null, isolatedTargetCapture: Boolean = false): String {
+    fun check(service: AccessibilityService, targetWindowId: Int? = null): ForegroundWindowPolicy.Identity {
         val windows = service.windows.orEmpty()
         val target = if (targetWindowId != null) windows.firstOrNull { it.id == targetWindowId }
             else windows.firstOrNull { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && (it.isActive || it.isFocused) }
@@ -78,19 +70,11 @@ internal object WindowSafety {
             throw CaptureFailure("目标页面不再处于前台，请返回原页面后继续")
         val content = contentViewport(service)
         val descriptors = windows.map { descriptor(it, content) }
-        val area = UiBounds(region.left,region.top,region.right,region.bottom)
-        val obstruction = WindowOcclusionPolicy.blocker(descriptors, target.id, area, service.packageName, if (isolatedTargetCapture) WindowOcclusionPolicy.CaptureMode.TARGET_WINDOW else WindowOcclusionPolicy.CaptureMode.SCREEN_PIXELS)
-        if (obstruction != null) {
-            // Structural diagnostics only: no page text, account data or raw window titles are exported.
-            if (obstruction.active || obstruction.focused)
-                throw CaptureFailure("其他窗口已取得焦点，请关闭弹窗或键盘并返回原页面后继续")
-            val titleHash = obstruction.title?.let { java.security.MessageDigest.getInstance("SHA-256").digest(it.toByteArray()).take(4).joinToString("") { b -> "%02x".format(b) } } ?: "null"
-            throw WindowObstruction("窗口遮挡: ${obstruction.kind}/${obstruction.platformType} id=${obstruction.id} a=${obstruction.active} f=${obstruction.focused} pkg=${obstruction.rootPackage ?: "null"} titleHash=$titleHash b=${obstruction.bounds} r=${obstruction.systemRegions.take(2)}")
-        }
+        val identity = ForegroundWindowPolicy.identity(descriptors, target.id, service.packageName)
+            ?: throw CaptureFailure("前台应用或焦点已变化，请返回原页面后继续")
         val presentIds = windows.map { it.id }.toSet()
         val presentTitles = descriptors.mapNotNull { it.title }.toSet()
         owned.entries.removeAll { (_, v) -> v.retired && v.ids.none { it in presentIds } && v.title !in presentTitles }
-        return descriptors.filterNot { WindowOcclusionPolicy.isOwned(it,service.packageName) }
-            .sortedBy { it.id }.joinToString("|") { "${it.id}:${it.kind}/${it.platformType}:${it.displayId}:${it.layer}:${it.active}:${it.focused}:${it.rootPackage}:${WindowOcclusionPolicy.regions(it)}" }
+        return identity
     }
 }

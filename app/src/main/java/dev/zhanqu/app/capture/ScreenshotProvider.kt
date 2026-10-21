@@ -18,7 +18,7 @@ internal class ScreenshotProvider(private val service: AccessibilityService, pri
             delay(180)
             validate()
             val visibleArea = WindowSafety.visibleArea(service, area)
-            val initialWindows = WindowSafety.check(service, visibleArea, windowId, isolatedTargetCapture = Build.VERSION.SDK_INT >= 34)
+            val initialWindows = WindowSafety.check(service, windowId)
             var bitmap: Bitmap? = null
             val windowBounds = Rect()
             if (Build.VERSION.SDK_INT >= 34) {
@@ -28,7 +28,7 @@ internal class ScreenshotProvider(private val service: AccessibilityService, pri
             for (attempt in 0..2) {
                 try {
                     validate()
-                    if (WindowSafety.check(service, visibleArea, windowId, isolatedTargetCapture = Build.VERSION.SDK_INT >= 34) != initialWindows)
+                    if (WindowSafety.check(service, windowId) != initialWindows)
                         throw CaptureFailure("截图重试前窗口状态变化，请确认原页面后继续")
                     bitmap = withTimeoutOrNull(5000) { captureOnce(windowId) } ?: throw CaptureFailure("系统截图回调超时，请稍后重试")
                     break
@@ -41,8 +41,8 @@ internal class ScreenshotProvider(private val service: AccessibilityService, pri
             val full = bitmap ?: throw CaptureFailure("截图未返回图像")
             try {
                 validate()
-                if (WindowSafety.check(service, visibleArea, windowId, isolatedTargetCapture = Build.VERSION.SDK_INT >= 34) != initialWindows)
-                    throw CaptureFailure("截图期间窗口集合发生变化，请确认页面后重试")
+                if (WindowSafety.check(service, windowId) != initialWindows)
+                    throw CaptureFailure("截图期间目标窗口发生变化，请确认页面后重试")
                 val local = Rect(visibleArea)
                 if (Build.VERSION.SDK_INT >= 34) {
                     if (full.width != windowBounds.width() || full.height != windowBounds.height())

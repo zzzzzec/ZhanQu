@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
 import dev.zhanqu.app.MainActivity
+import dev.zhanqu.app.core.ForegroundWindowPolicy
 import dev.zhanqu.app.core.BuiltInProfiles
 import dev.zhanqu.app.core.CaptureProfile
 import dev.zhanqu.app.data.NoteDatabase
@@ -27,8 +28,11 @@ class ZhanQuAccessibilityService : AccessibilityService() {
     private var captureJob: Job? = null
     private var snapshotJob: Job? = null
     private var snapshotWindowEpoch = 0L
+    private var snapshotTargetPackage: String? = null
+    private var snapshotTargetWindowId = -1
     private var currentActivity: String? = null
     private var targetPackage: String? = null
+    private var targetWindowId: Int? = null
     private var ownActionUntil = 0L
     private var destroyed = false
     private var receiverRegistered = false
@@ -84,6 +88,7 @@ class ZhanQuAccessibilityService : AccessibilityService() {
             return
         }
         targetPackage = profile.packageName
+        targetWindowId = reader.foregroundWindowId()
         configureEvents(true)
         CaptureHub.mutableResult.value = null
         val newRunner = CaptureSessionRunner(profile, reader, GestureController(this, ::markOwnAction) { hidden -> overlay.temporarilyHide(hidden) },
@@ -93,7 +98,7 @@ class ZhanQuAccessibilityService : AccessibilityService() {
         runner = newRunner
         captureJob = scope.launch {
             try { newRunner.run(options) }
-            finally { runner = null; targetPackage = null; if (!destroyed) configureEvents(false) }
+            finally { runner = null; targetPackage = null; targetWindowId = null; if (!destroyed) configureEvents(false) }
         }
     }
     private fun exportPageSnapshot() {
@@ -106,13 +111,17 @@ class ZhanQuAccessibilityService : AccessibilityService() {
             val previous = CaptureHub.mutableState.value
             CaptureHub.mutableState.value = previous.copy(snapshotting = true, message = "正在生成页面快照", error = null)
             configureEvents(true)
-            // Establish the epoch before the exporter yields; only our own overlay events are ignored.
+            // Establish the target and epoch before the exporter first yields.
             var epoch: Long? = null
             try {
-                val file = PageSnapshotExporter(this@ZhanQuAccessibilityService) { overlay.temporarilyHide(it) }.capture {
+                val file = PageSnapshotExporter(this@ZhanQuAccessibilityService) { overlay.temporarilyHide(it) }.capture { pkg, windowId ->
                     if (destroyed) throw CancellationException("Service destroyed")
                     val expected = epoch
-                    if (expected == null) epoch = snapshotWindowEpoch
+                    if (expected == null) {
+                        snapshotTargetPackage = pkg
+                        snapshotTargetWindowId = windowId
+                        epoch = snapshotWindowEpoch
+                    }
                     else if (expected != snapshotWindowEpoch) throw CaptureFailure("页面发生切换，请稳定后重试")
                 }
                 CaptureHub.mutableState.value = previous.copy(message = "页面快照已保存在本机", error = null)
@@ -133,6 +142,8 @@ class ZhanQuAccessibilityService : AccessibilityService() {
                     android.widget.Toast.makeText(this@ZhanQuAccessibilityService, message, android.widget.Toast.LENGTH_LONG).show()
                 }
             } finally {
+                snapshotTargetPackage = null
+                snapshotTargetWindowId = -1
                 if (!destroyed) { configureEvents(false); CaptureHub.mutableState.value = CaptureHub.mutableState.value.copy(snapshotting = false) }
             }
         }
@@ -156,19 +167,29 @@ class ZhanQuAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
         val pkg = event.packageName?.toString()
-        if (snapshotJob?.isActive == true && event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg != packageName)
-            snapshotWindowEpoch++
+        val windowStateEvent = event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+        val windowsEvent = event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED
+        val foregroundPackage = if (windowStateEvent || windowsEvent) reader.foregroundPackage() else null
+        val foregroundWindowId = if (windowStateEvent || windowsEvent) reader.foregroundWindowId() else null
+        fun changedTarget(expectedPackage: String, expectedWindowId: Int): Boolean {
+            if (foregroundPackage != expectedPackage || foregroundWindowId != expectedWindowId) return true
+            return windowStateEvent && ForegroundWindowPolicy.changesSnapshotTarget(pkg, event.windowId,
+                expectedPackage, expectedWindowId, foregroundPackage, foregroundWindowId, packageName,
+                windows.firstOrNull { it.id == event.windowId }?.let { it.isActive || it.isFocused })
+        }
+        val snapshotPackage = snapshotTargetPackage
+        if (snapshotJob?.isActive == true && snapshotPackage != null && (windowStateEvent || windowsEvent) &&
+            changedTarget(snapshotPackage, snapshotTargetWindowId)) snapshotWindowEpoch++
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg == "com.xingin.xhs") {
             val className = event.className?.toString()
             if (className?.endsWith("Activity") == true) currentActivity = className
         }
         if (captureJob?.isActive != true) return
-        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg == targetPackage) {
-            pauseCapture("目标应用出现页面或窗口切换，请确认仍是原笔记后手动继续")
-        }
-        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED) {
-            val foreground = reader.foregroundPackage()
-            if (foreground != targetPackage) pauseCapture("前台应用或系统窗口已变化，请返回原页面后手动继续")
+        val capturePackage = targetPackage
+        val captureWindow = targetWindowId
+        if ((windowStateEvent || windowsEvent) && capturePackage != null && captureWindow != null &&
+            changedTarget(capturePackage, captureWindow)) {
+            pauseCapture("目标页面或前台焦点已变化，请返回原页面后手动继续")
         }
         if (event.eventType == AccessibilityEvent.TYPE_TOUCH_INTERACTION_START) {
             pauseCapture("检测到触摸操作，已暂停；确认页面后手动继续")

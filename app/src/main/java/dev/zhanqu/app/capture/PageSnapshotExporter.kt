@@ -13,32 +13,32 @@ import java.io.File
 
 /** One explicit read, one screenshot, one verification read. Never scrolls, taps or sends data. */
 internal class PageSnapshotExporter(private val service: AccessibilityService, private val overlayHidden: (Boolean) -> Unit) {
-    suspend fun capture(validateSession: () -> Unit): File = withTimeout(20_000) {
+    suspend fun capture(validateSession: (String, Int) -> Unit): File = withTimeout(20_000) {
         // Activity events are intentionally not monitored for arbitrary apps while idle.
         val reader = UiTreeReader(service) { null }
         overlayHidden(true)
         var pending: File? = null
         try {
-            validateSession()
             val pkg = reader.foregroundPackage() ?: throw CaptureFailure("请保持要导出的应用页面在前台")
             if (pkg == service.packageName) throw CaptureFailure("请先打开要导出的应用页面")
             val before = reader.read(pkg, 2500)
+            validateSession(pkg, before.windowId)
             delay(220)
-            validateSession()
+            validateSession(pkg, before.windowId)
             val snapshot = before.snapshot
             if (snapshot.screenWidth.toLong() * snapshot.screenHeight > 16_000_000L)
                 throw CaptureFailure("屏幕尺寸过大，无法安全生成快照")
             val window = service.windows.firstOrNull { it.id == before.windowId } ?: throw CaptureFailure("目标窗口已经消失")
             val bounds = Rect().also(window::getBoundsInScreen)
             val area = WindowSafety.visibleArea(service, bounds)
-            val identity = WindowSafety.check(service, area, before.windowId, Build.VERSION.SDK_INT >= 34)
+            val identity = WindowSafety.check(service, before.windowId)
             fun validate() {
-                validateSession()
+                validateSession(pkg, before.windowId)
                 if (!service.getSystemService(android.os.PowerManager::class.java).isInteractive ||
                     service.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked)
                     throw CaptureFailure("屏幕已锁定或关闭，本次快照已取消")
                 if (reader.foregroundPackage() != pkg ||
-                    WindowSafety.check(service, area, before.windowId, Build.VERSION.SDK_INT >= 34) != identity)
+                    WindowSafety.check(service, before.windowId) != identity)
                     throw CaptureFailure("页面或窗口已变化，请回到原页面后重试")
             }
             // Outer finally owns hiding; do not briefly restore between screenshot and final tree check.

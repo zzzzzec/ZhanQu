@@ -37,6 +37,11 @@ internal class UiTreeReader(private val service: AccessibilityService, private v
         return service.rootInActiveWindow
     }
 
+    fun foregroundWindowId(): Int? {
+        val root = applicationRoot() ?: return null
+        return try { root.windowId } finally { @Suppress("DEPRECATION") root.recycle() }
+    }
+
     fun foregroundPackage(): String? {
         val root = applicationRoot() ?: return null
         return try { root.packageName?.toString() } finally { @Suppress("DEPRECATION") root.recycle() }
@@ -137,11 +142,8 @@ internal class UiTreeReader(private val service: AccessibilityService, private v
             if (action == AccessibilityNodeInfo.ACTION_CLICK && !node.isClickable) return false
             val metrics = service.resources.displayMetrics
             if (!Rect.intersects(b, Rect(0, 0, metrics.widthPixels, metrics.heightPixels))) return false
-            try { WindowSafety.check(service, WindowSafety.visibleArea(service, b), expectedWindow) }
-            catch (e: WindowObstruction) {
-                if (action == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD || action == AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) return false
-                throw e
-            }
+            WindowSafety.visibleArea(service, b)
+            WindowSafety.check(service, expectedWindow)
             return node.performAction(action)
         } finally {
             if (node !== root) { @Suppress("DEPRECATION") node.recycle() }

@@ -87,3 +87,7 @@ gradle/wrapper/gradle-wrapper.properties
 gradlew
 gradlew.bat
 settings.gradle
+app/src/main/java/dev/zhanqu/app/core/ForegroundWindowPolicy.kt
+app/src/test/java/dev/zhanqu/app/core/ForegroundWindowPolicyTest.kt
+docs/RELEASE_0.3.2.md
+app/src/test/java/dev/zhanqu/app/core/CommentFieldFallbackTest.kt

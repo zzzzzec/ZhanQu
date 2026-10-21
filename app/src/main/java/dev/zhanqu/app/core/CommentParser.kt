@@ -35,10 +35,21 @@ object CommentParser {
         val ancestorCache = mutableMapOf<String, List<UiNode>>()
         fun ancestors(node: UiNode) = ancestorCache.getOrPut(node.path) { snapshot.ancestorsOf(node.path) }
         fun owner(node: UiNode): String? = (ancestors(node) + node).lastOrNull { it.path in containers }?.path
+        // Fallback is per comment, not per screen: parent and reply rows may use different
+        // author/time IDs simultaneously. A match in one row must not hide another row's fields.
+        // Keep ownership strict so a nested reply can never supply its parent's missing text.
+        val nodesByOwner = snapshot.allNodes().groupBy { owner(it) }
         val fields = listOf("commentText", "commentAuthor", "commentTime", "commentRegion", "commentLikes").associateWith { name ->
-            profile.find(snapshot, name, visibleOnly = false).groupBy { owner(it) }
+            containers.keys.associateWith { path ->
+                profile.locators[name].orEmpty().asSequence().mapNotNull { candidate ->
+                    nodesByOwner[path].orEmpty().asSequence()
+                        .filter { candidate.matches(it, snapshot) }
+                        .mapNotNull { it.text?.trim()?.takeIf(String::isNotEmpty) }
+                        .firstOrNull()
+                }.firstOrNull()
+            }
         }
-        fun field(path: String, name: String): String? = fields[name]?.get(path)?.asSequence()?.filterNot { it.password }?.mapNotNull { it.text?.trim()?.takeIf(String::isNotEmpty) }?.firstOrNull()
+        fun field(path: String, name: String): String? = fields[name]?.get(path)
         // A profile may explicitly declare list-row grouping. Only uninterrupted, recognized
         // parent/reply/expand rows in the same list count; an unrelated row resets the group.
         val siblingParents = mutableMapOf<String, UiNode>()
