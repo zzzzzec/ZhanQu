@@ -70,6 +70,8 @@ internal class UiTreeReader(private val service: AccessibilityService, private v
                     if (textChars > 1_000_000) throw CaptureFailure("页面文字过多，快照大小超限")
                 }
                 val rect = Rect().also(node::getBoundsInScreen)
+                @Suppress("DEPRECATION")
+                val layout = Rect().also(node::getBoundsInParent)
                 val children = mutableListOf<UiNode>()
                 if (node.childCount > 6000) throw CaptureFailure("页面子节点数量超限")
                 for (index in 0 until node.childCount) {
@@ -83,7 +85,8 @@ internal class UiTreeReader(private val service: AccessibilityService, private v
                     bounds = UiBounds(rect.left, rect.top, rect.right, rect.bottom), clickable = node.isClickable,
                     scrollable = node.isScrollable, visible = node.isVisibleToUser, password = node.isPassword, children = children, focusable = node.isFocusable,
                     checkable = node.isCheckable, checked = if (node.isCheckable) node.isChecked else null,
-                    editable = node.isEditable, longClickable = node.isLongClickable)
+                    editable = node.isEditable, longClickable = node.isLongClickable,
+                    layoutWidth = layout.width().takeIf { it > 0 }, layoutHeight = layout.height().takeIf { it > 0 })
             }
             val copied = copy(root, "0", 0)
             if (copied.anyNode { it.password }) throw CaptureFailure("检测到密码输入区域，不采集此页面")

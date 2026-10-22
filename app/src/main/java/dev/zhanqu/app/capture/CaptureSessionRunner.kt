@@ -131,6 +131,9 @@ internal class CaptureSessionRunner(
             val counter = profile.pageCounter(screen.snapshot)
             val bounds = profile.imageBounds(screen.snapshot)
             val loading = screen.snapshot.allNodes().any { it.visible && it.className?.endsWith("ProgressBar") == true }
+            val image = profile.imageNode(screen.snapshot)
+            if (!loading && image != null && ImageCapturePolicy.completeRegion(image, screen.snapshot.displayBounds) == null)
+                throw CaptureFailure("当前图片没有完整显示或无法确认完整边界。请返回图文顶部、完整显示图片后重试；本次不将裁切图计为完成页")
             val signature = "$counter:$bounds"
             if (!loading && bounds != null && signature == previous) return screen
             previous = if (loading) null else signature
@@ -202,7 +205,8 @@ internal class CaptureSessionRunner(
                 val screen = stableImage()
                 val check = profile.pageCounter(screen.snapshot) ?: throw CaptureFailure("当前图片页码丢失")
                 if (check != current) throw CaptureFailure("图片页码在截图前发生变化")
-                val region = profile.imageBounds(screen.snapshot)?.androidRect() ?: throw CaptureFailure("无法定位当前可见图片")
+                val region = profile.imageNode(screen.snapshot)?.let { ImageCapturePolicy.completeRegion(it, screen.snapshot.displayBounds) }?.androidRect()
+                    ?: throw CaptureFailure("图片未完整显示，本次不将裁切图计为完成页")
                 status("正在截取第 ${current.current} / ${current.total} 页")
                 val sessionContext = currentCoroutineContext()
                 val bitmap = try {
@@ -212,6 +216,8 @@ internal class CaptureSessionRunner(
                         val actual = reader.read(profile.packageName); validate(actual)
                         if (profile.pageCounter(actual.snapshot) != current) throw CaptureFailure("截图期间发生翻页，已停止")
                         if (profile.imageBounds(actual.snapshot)?.androidRect() != region) throw CaptureFailure("截图期间图片区域变化，已停止以免裁切错误")
+                        if (profile.imageNode(actual.snapshot)?.let { ImageCapturePolicy.completeRegion(it, actual.snapshot.displayBounds) }?.androidRect() != region)
+                            throw CaptureFailure("截图期间图片完整边界变化，已停止以免遗漏")
                     }
                 } catch (_: CapturePausedException) {
                     ready() // Resume is always an explicit user action; then obtain a new image.

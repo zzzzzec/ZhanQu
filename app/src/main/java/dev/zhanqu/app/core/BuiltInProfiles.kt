@@ -33,7 +33,7 @@ object BuiltInProfiles {
         "commentRegion":[{"viewId":"tv_location","ancestorViewId":"noteDetailRV"},{"viewId":"locationTV","ancestorViewId":"noteDetailRV"}],
         "commentLikes":[{"viewId":"tv_like_num_new_engage","ancestorViewId":"noteDetailRV"},{"viewId":"likeCountTV","ancestorViewId":"noteDetailRV"},{"viewId":"tv_like_count","ancestorViewId":"noteDetailRV"}],
         "expandReplies":[{"viewId":"loadMoreTV","textRegex":"(展开|更多|加载).*回复","ancestorViewId":"noteDetailRV"}],
-        "commentEnd":[{"textRegex":"^(没有更多评论了|没有更多了|已显示全部评论|到底了)${'$'}","ancestorViewId":"noteDetailRV"}]
+        "commentEnd":[{"textRegex":"^[-\\s—·]*(没有更多评论了|没有更多了|已显示全部评论|到底了)[-\\s—·]*${'$'}","ancestorViewId":"noteDetailRV"}]
       },
       "data":{"pageCounterRegex":"图片[,，]第\\s*(\\d+)张[,，]共\\s*(\\d+)张"},
       "flows":{

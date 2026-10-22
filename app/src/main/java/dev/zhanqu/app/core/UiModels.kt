@@ -25,7 +25,8 @@ data class UiNode(
     val password: Boolean = false,
     val children: List<UiNode> = emptyList(),
     val focusable: Boolean = false, val checkable: Boolean = false, val checked: Boolean? = null,
-    val editable: Boolean = false, val longClickable: Boolean = false
+    val editable: Boolean = false, val longClickable: Boolean = false,
+    val layoutWidth: Int? = null, val layoutHeight: Int? = null
 ) {
     val shortViewId: String? get() = viewId?.substringAfterLast('/')
     fun descendants(includeSelf: Boolean = true): Sequence<UiNode> = sequence {

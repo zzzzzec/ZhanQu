@@ -134,10 +134,11 @@ class CaptureProfile private constructor(
         return if (current > 0 && total in 1..limits.maxPages && current <= total) PageCounter(current, total) else null
     }
 
-    fun imageBounds(snapshot: UiSnapshot): UiBounds? = find(snapshot, imageFlow.screenshotRegion)
-        .map { it.bounds.intersection(snapshot.displayBounds) }
-        .filter { !it.isEmpty && it.width >= 32 && it.height >= 32 }
-        .maxByOrNull { it.area }
+    fun imageNode(snapshot: UiSnapshot): UiNode? = find(snapshot, imageFlow.screenshotRegion)
+        .filter { val bounds = it.bounds.intersection(snapshot.displayBounds); bounds.width >= 32 && bounds.height >= 32 }
+        .maxByOrNull { it.bounds.intersection(snapshot.displayBounds).area }
+
+    fun imageBounds(snapshot: UiSnapshot): UiBounds? = imageNode(snapshot)?.bounds?.intersection(snapshot.displayBounds)
 
     companion object {
         fun fromJson(json: String): CaptureProfile {

@@ -10,12 +10,15 @@ android {
  defaultConfig {
   applicationId 'dev.zhanqu.app'
   def previewBuild = project.findProperty('zhanquPreview')?.toString()?.toBoolean() ?: false
-  if (previewBuild) applicationIdSuffix '.preview'
-  manifestPlaceholders = [appLabel: previewBuild ? '粘取预览' : '粘取', accessibilityLabel: previewBuild ? '粘取预览页面采集' : '粘取页面采集']
+  def deviceTestBuild = project.findProperty('zhanquDeviceTest')?.toString()?.toBoolean() ?: false
+  if (previewBuild && deviceTestBuild) throw new GradleException('Choose either zhanquPreview or zhanquDeviceTest, not both.')
+  if (deviceTestBuild) applicationIdSuffix '.devtest'
+  else if (previewBuild) applicationIdSuffix '.preview'
+  manifestPlaceholders = [appLabel: deviceTestBuild ? '粘取调试' : (previewBuild ? '粘取预览' : '粘取'), accessibilityLabel: deviceTestBuild ? '粘取调试页面采集' : (previewBuild ? '粘取预览页面采集' : '粘取页面采集')]
   minSdk 30
   targetSdk 35
-  versionCode 11
-  versionName '0.3.2'
+  versionCode 12
+  versionName '0.3.3'
   ndk { abiFilters(*((project.findProperty('zhanquAbis') ?: 'arm64-v8a').toString().split(','))) }
   testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
  }
@@ -43,4 +46,8 @@ dependencies {
  testImplementation 'junit:junit:4.13.2'
  testImplementation 'org.json:json:20240303'
  testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.1'
+ androidTestImplementation 'androidx.test:core:1.6.1'
+ androidTestImplementation 'androidx.test:runner:1.6.2'
+ androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+ androidTestImplementation 'androidx.test.uiautomator:uiautomator:2.3.0'
 }
