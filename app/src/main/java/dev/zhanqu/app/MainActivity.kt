@@ -132,10 +132,7 @@ class MainActivity : ComponentActivity() {
     LazyColumn(Modifier.fillMaxSize().padding(insets),state=libraryScroll,contentPadding=PaddingValues(start=20.dp,end=20.dp,top=20.dp,bottom=24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
      item {
       Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween) {
-       Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
-        Text("粘取",style=MaterialTheme.typography.headlineLarge,fontWeight=FontWeight.Bold)
-        Text("收集 · 整理 · 留下",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-       }
+       Text("粘取",style=MaterialTheme.typography.headlineLarge,fontWeight=FontWeight.Bold)
        Box {
         TextButton(onClick={menu=true}) { Text("更多") }
         DropdownMenu(expanded=menu,onDismissRequest={menu=false}) {
@@ -155,13 +152,19 @@ class MainActivity : ComponentActivity() {
        Button(modifier=Modifier.fillMaxWidth().heightIn(min=52.dp),onClick={consent=true;getSharedPreferences("privacy",MODE_PRIVATE).edit().putBoolean("disclosure",true).apply()}) { Text("同意并继续") }
       } else SectionCard {
        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween) {
-        Text(if(state.running) { if(state.paused) "采集已暂停" else "正在采集" } else "保存眼前的内容",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold,modifier=Modifier.weight(1f))
+        Text(if(state.running) { if(state.paused) "采集已暂停" else "正在采集" } else "页面采集",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold,modifier=Modifier.weight(1f))
         StatusLabel(if(state.connected) "已就绪" else "待连接")
        }
        if(state.running) {
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-         Metric("图页", "${state.pagesCaptured} / ${state.reportedPages ?: "—"}",Modifier.weight(1f))
-         Metric("评论", "${state.commentsCaptured}",Modifier.weight(1f))
+         if (state.detectedApp == dev.zhanqu.app.core.CaptureApp.ZHIHU) {
+          Metric("回答", "${state.answersCaptured}",Modifier.weight(1f))
+         } else if (state.detectedApp == dev.zhanqu.app.core.CaptureApp.BILIBILI) {
+          Metric("评论与回复", "${state.commentsCaptured}",Modifier.weight(1f))
+         } else {
+          Metric("图页", "${state.pagesCaptured} / ${state.reportedPages ?: "—"}",Modifier.weight(1f))
+          Metric("评论", "${state.commentsCaptured}",Modifier.weight(1f))
+         }
         }
         Text(state.message,style=MaterialTheme.typography.bodySmall,color=if(state.error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
@@ -169,7 +172,7 @@ class MainActivity : ComponentActivity() {
          OutlinedButton(modifier=Modifier.weight(1f),enabled=state.stage!="stopping",onClick={CaptureHub.stop()}) { Text(if(state.stage=="stopping") "正在保存…" else "结束并保存") }
         }
        } else {
-        Text(if(state.connected) "在小红书图文笔记中，用悬浮按钮开始；其他应用可导出页面快照。" else "连接无障碍服务，即可从页面采集。",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(if(state.connected) "支持小红书、知乎和 B 站。" else "连接无障碍服务，开始采集。",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
         Button(modifier=Modifier.fillMaxWidth().heightIn(min=52.dp),onClick={if(state.connected) { CaptureHub.showControls(); message="悬浮入口已打开，前往想保存的笔记" } else startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))}) { Text(if(state.connected) "打开悬浮采集" else "连接无障碍服务") }
         state.error?.let { Text(it,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.error) }
        }
@@ -191,7 +194,7 @@ class MainActivity : ComponentActivity() {
      }
      if(notes.isEmpty()) item {
       SectionCard {
-       Text(if(query.isBlank()) "第一份收藏，从这里开始" else "没有找到相关笔记",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
+       Text(if(query.isBlank()) "暂无笔记" else "没有找到相关笔记",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
        Text(if(query.isBlank()) "采集页面或导入图片，文字会自动保存到这里。" else "换个关键词，或清空搜索。",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
        if(query.isNotBlank()) TextButton(onClick={query=""}) { Text("查看全部笔记") }
       }
@@ -203,7 +206,7 @@ class MainActivity : ComponentActivity() {
         Text(n.editedText.replace(Regex("[#*\\n]+")," ").take(120),maxLines=2,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween) {
          Text(dateFormat.format(Date(n.capturedAt)),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-         StatusLabel(when(n.status) { "complete" -> "已保存"; "stopped" -> "部分内容"; else -> "待核对" })
+         StatusLabel(when(n.status) { "complete", "stopped" -> "已保存"; else -> "未完成" })
         }
        }
       }
@@ -257,7 +260,7 @@ class MainActivity : ComponentActivity() {
   }}) { Text("删除全部",color=MaterialTheme.colorScheme.error) }},dismissButton={TextButton(onClick={clearDialog=false}) { Text("取消") }})
   if(help) AlertDialog(onDismissRequest={help=false},title={Text("使用粘取")},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)) {
    HelpItem("页面快照","在任意应用的目标页面打开悬浮入口，点击页面快照，生成截图与节点 ZIP 后自行保存或分享；不会自动上传。受保护页面、密码区域和遮挡窗口不会导出。")
-   HelpItem("采集页面","连接无障碍服务，打开悬浮入口，再前往小红书图文笔记。选择内容后点击开始。采集结果会自动保存。")
+   HelpItem("采集页面","打开小红书图文、知乎回答或 B 站视频，点击悬浮入口提取。")
    HelpItem("暂停与继续","切换页面或锁屏会暂停采集。您也可以随时暂停，或结束并保存已有内容。")
    HelpItem("整理与导出","点开笔记可修改文字，保存后保留您的校正。复制、分享和导出使用当前正文；JSON 另含原始识别结果。识别文字可在这里核对。")
    HelpItem("本机处理","粘取不请求网络权限。页面文字和所选图片均在设备上处理，仅在您主动分享或导出时离开本机。不同设备和页面的采集效果可能不同。")

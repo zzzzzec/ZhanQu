@@ -9,15 +9,21 @@ connection = sqlite3.connect(str(database))
 connection.row_factory = sqlite3.Row
 records = []
 summaries = []
-for row in connection.execute("SELECT * FROM notes WHERE sourcePackage = ? ORDER BY capturedAt DESC", ("com.xingin.xhs",)):
+for row in connection.execute("SELECT * FROM notes WHERE sourcePackage IN (?, ?, ?) ORDER BY capturedAt DESC", ("com.xingin.xhs", "com.zhihu.android", "tv.danmaku.bili")):
     record = dict(row)
     raw = json.loads(record["rawJson"])
     record["decoded"] = raw
     records.append(record)
     comments = raw.get("comments", [])
     pages = raw.get("pages", [])
+    answers = raw.get("answers", [])
     summaries.append({
         "id": record["id"], "title": record["title"], "status": record["status"],
+        "sourcePackage": record["sourcePackage"], "captureKind": raw.get("captureKind"),
+        "video": raw.get("video"),
+        "answers": len(answers), "answerCharacters": [len(a.get("text", "")) for a in answers],
+        "answerObservations": [len(a.get("observations", [])) for a in answers],
+        "answerEndReached": [a.get("endReached", False) for a in answers],
         "reportedPages": raw.get("reportedPages"), "pages": len(pages),
         "pageIndices": [page.get("pageIndex") for page in pages],
         "pageHashes": [page.get("contentHash") for page in pages],

@@ -61,7 +61,7 @@ Android 11 实例使用软件渲染以避免宿主图形后端问题；启动脚
 
 四项 UI 测试不证明无障碍授权、真实截图/OCR、悬浮窗、跨应用翻页或评论覆盖率。连接后在系统设置中手动启用“粘取调试页面采集”，使用你有权保存的非敏感样本，按 `TEST_PLAN.md` 验证，并区分实际通过、失败和未执行。首次系统授权、锁屏 PIN 和账号登录由用户在手机上完成。
 
-`tools/phone-driver/` 是独立测试应用，不打入产品。它通过 UI Automator 观察和操作页面，使用 `FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES` 保持采集服务运行，避免对产品本身运行 instrumentation 时重启采集进程。当前工具的操作范围明确限定为小红书、知乎、独立调试包、设置、系统权限提示和系统文件选择器；允许驱动观察知乎不代表产品已支持知乎提取。后续平台各自编写测试步骤，不建立通用任务配置语言。
+`tools/phone-driver/` 是独立测试应用，不打入产品。它通过 UI Automator 观察和操作页面，使用 `FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES` 保持采集服务运行，避免对产品本身运行 instrumentation 时重启采集进程。工具范围限定为小红书、知乎、B站、独立调试包、设置、系统权限提示和系统文件选择器。各平台分别编写测试步骤，不建立通用任务配置语言。
 
 本机先加载工具链并构建，然后按各目录 `output-metadata.json` 中的 `elements[0].outputFile` 找到 APK，用 `adb install -r -t` 安装应用及测试 APK：
 

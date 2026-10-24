@@ -23,6 +23,7 @@ keystore.properties
 google-services.json
 
 # Private captures, user records and generated diagnostics
+/.codex-attachments/
 /private/
 /snapshots/
 /captures/

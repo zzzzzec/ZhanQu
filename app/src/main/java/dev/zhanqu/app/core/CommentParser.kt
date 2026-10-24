@@ -15,7 +15,8 @@ data class ParsedComment(
     val isReply: Boolean = parentId != null,
     val parentUnresolved: Boolean = false,
     val visible: Boolean = true,
-    val parentRelation: String = if (parentId != null) "ancestor" else if (isReply) "unresolved" else "none"
+    val parentRelation: String = if (parentId != null) "ancestor" else if (isReply) "unresolved" else "none",
+    val textState: String = "complete"
 )
 
 object CommentParser {

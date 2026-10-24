@@ -8,7 +8,15 @@ app/src/main/java/dev/zhanqu/app/PageSnapshotActivity.kt
 app/src/main/java/dev/zhanqu/app/capture/CaptureModels.kt
 app/src/main/java/dev/zhanqu/app/capture/CaptureOverlay.kt
 app/src/main/java/dev/zhanqu/app/capture/CapturePersistence.kt
-app/src/main/java/dev/zhanqu/app/capture/CaptureSessionRunner.kt
+app/src/main/java/dev/zhanqu/app/capture/CaptureTask.kt
+app/src/main/java/dev/zhanqu/app/capture/apps/xiaohongshu/XiaohongshuCaptureTask.kt
+app/src/main/java/dev/zhanqu/app/capture/apps/xiaohongshu/XiaohongshuCaptureOptions.kt
+app/src/main/java/dev/zhanqu/app/capture/apps/xiaohongshu/XiaohongshuPageGeometry.kt
+app/src/test/java/dev/zhanqu/app/capture/apps/xiaohongshu/XiaohongshuPageGeometryTest.kt
+app/src/main/java/dev/zhanqu/app/capture/apps/zhihu/ZhihuPageReader.kt
+app/src/main/java/dev/zhanqu/app/capture/apps/zhihu/ZhihuAnswerCaptureTask.kt
+app/src/main/java/dev/zhanqu/app/core/CaptureApp.kt
+app/src/test/java/dev/zhanqu/app/capture/apps/zhihu/ZhihuCaptureTest.kt
 app/src/main/java/dev/zhanqu/app/capture/GestureController.kt
 app/src/main/java/dev/zhanqu/app/capture/LocalImageOcr.kt
 app/src/main/java/dev/zhanqu/app/capture/MlKitChineseEngine.kt
@@ -109,3 +117,6 @@ tools/phone-driver/gradle.properties
 tools/phone-driver/settings.gradle
 tools/phone-driver/src/androidTest/java/dev/zhanqu/uidriver/ControlTest.java
 tools/phone-driver/src/main/AndroidManifest.xml
+app/src/main/java/dev/zhanqu/app/capture/apps/bilibili/BilibiliPageReader.kt
+app/src/main/java/dev/zhanqu/app/capture/apps/bilibili/BilibiliVideoCaptureTask.kt
+app/src/test/java/dev/zhanqu/app/capture/apps/bilibili/BilibiliCaptureTest.kt

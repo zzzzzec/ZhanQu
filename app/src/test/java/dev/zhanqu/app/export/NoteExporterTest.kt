@@ -12,9 +12,9 @@ class NoteExporterTest {
    pages=listOf(CapturedPage(2,7,"第二页","hash2"),CapturedPage(1,7,"第一页","hash1")),
    comments=listOf(ParsedComment("a",null,"合成甲","正文"),ParsedComment("b","a","合成乙","回复")),errors=listOf("第3页失败"))
   val md=NoteExporter.markdown(n)
-  assertTrue(md.indexOf("图页 1/7")<md.indexOf("图页 2/7"))
-  assertTrue(md.contains("页面宣称：34；主评论：1；回复：1"))
-  assertTrue(md.contains("确认到底：false"));assertTrue(md.contains("第3页失败"))
+  assertTrue(md.indexOf("## 图页 1/7")<md.indexOf("## 图页 2/7"))
+  assertTrue(md.contains("页面评论数：34；主评论：1；回复：1"))
+  assertTrue(md.contains("第3页失败"))
   val json=JSONObject(NoteExporter.json(n,"人工校正"))
   assertEquals("人工校正",json.getString("editedText"))
   assertEquals(1,json.getJSONArray("pages").getJSONObject(0).getInt("pageIndex"))
@@ -28,7 +28,7 @@ class NoteExporterTest {
  }
  @Test fun unknownCountsRemainUnknown() {
   val n=CapturedNote(sourcePackage="test.fixture")
-  assertTrue(NoteExporter.markdown(n).contains("页面总数 未知"))
+  assertTrue(NoteExporter.markdown(n).contains("图页 0/未知"))
   assertTrue(JSONObject(NoteExporter.json(n)).isNull("reportedPages"))
   assertEquals("标题\n正文",NoteExporter.plain("# 标题\n正文"))
  }

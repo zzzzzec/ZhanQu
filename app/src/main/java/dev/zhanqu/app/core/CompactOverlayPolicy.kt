@@ -2,8 +2,9 @@ package dev.zhanqu.app.core
 
 /** Presentation only. Never changes capture safety or authorizes a new capture. */
 internal object CompactOverlayPolicy {
-    const val ENTRY_WIDTH_DP = 56
-    const val PANEL_WIDTH_DP = 216
+    const val ENTRY_TARGET_DP = 40
+    const val ENTRY_WIDTH_DP = 44
+    const val PANEL_WIDTH_DP = 188
     const val TOUCH_TARGET_DP = 48
 
     fun status(running: Boolean, paused: Boolean, stage: String, error: String?): String = when {

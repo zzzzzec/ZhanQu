@@ -1,10 +1,11 @@
-package dev.zhanqu.app.capture
+package dev.zhanqu.app.capture.apps.xiaohongshu
 
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
 import dev.zhanqu.app.core.*
+import dev.zhanqu.app.capture.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,7 +13,8 @@ import kotlinx.coroutines.flow.first
 import java.nio.ByteBuffer
 import java.security.MessageDigest
 
-internal class CaptureSessionRunner(
+internal class XiaohongshuCaptureTask(
+    private val options: XiaohongshuCaptureOptions,
     private val profile: CaptureProfile,
     private val reader: UiTreeReader,
     private val gestures: GestureController,
@@ -20,10 +22,10 @@ internal class CaptureSessionRunner(
     private val ownAction: () -> Unit,
     private val update: (CaptureUiState) -> Unit,
     private val publish: (CapturedNote) -> Unit
-) {
+) : CaptureTask {
     private val paused = MutableStateFlow(false)
     private var needsIdentityReconfirmation = false
-    private var note = CapturedNote(sourcePackage = profile.packageName)
+    private var note = CapturedNote(sourcePackage = profile.packageName, captureKind = "xhs_note")
     private var stage = "starting"
     private var pauseMessage = ""
     private var targetWindow = -1
@@ -38,15 +40,15 @@ internal class CaptureSessionRunner(
     private val errors = mutableListOf<String>()
     private val comments = CommentAccumulator()
 
-    fun pause(reason: String) { needsIdentityReconfirmation = true; paused.value = true; pauseMessage = reason; status(reason) }
-    fun resume() { paused.value = false; status("正在确认当前页面") }
+    override fun pause(reason: String) { needsIdentityReconfirmation = true; paused.value = true; pauseMessage = reason; status(reason) }
+    override fun resume() { paused.value = false; status("正在确认当前页面") }
     private fun status(message: String, error: String? = null, running: Boolean = true) {
         update(CaptureUiState(true, running, paused.value, stage, message, pages.count { it.state == "complete" }, note.reportedPages, comments.comments.size, error))
     }
     private fun text(snapshot: UiSnapshot, locator: String): String = profile.find(snapshot, locator, false)
         .mapNotNull { it.text?.trim()?.takeIf(String::isNotBlank) }.distinct().joinToString("\n")
 
-    suspend fun run(options: CaptureOptions) {
+    override suspend fun run() {
         try {
             withTimeout(30 * 60 * 1000L) {
                 val first = reader.read(profile.packageName)
@@ -72,19 +74,19 @@ internal class CaptureSessionRunner(
                     note.displayedCommentCount != null && comments.comments.size == note.displayedCommentCount)
                 note = result(if (completeImages && completeComments && errors.isEmpty()) "complete" else "partial")
                 publish(note)
-                status(if (note.status == "complete") "采集结束。请检查 OCR 文字后导出" else "已保留结果；完整性未完全确认，请查看说明", running = false)
+                status("已保存", running = false)
             }
         } catch (e: TimeoutCancellationException) {
             errors += "任务达到 30 分钟安全上限，已保存部分结果"; finish("partial", errors.last())
         } catch (e: CancellationException) {
-            errors += "用户停止或服务中断，已保留完成结果"; finish("stopped", errors.last())
+            finish("stopped", "已保存", error = null)
         } catch (e: Exception) {
             errors += (e.message ?: "采集失败，请重试当前页").take(240); finish("partial", errors.last())
         }
     }
-    private fun finish(state: String, message: String) {
+    private fun finish(state: String, message: String, error: String? = message) {
         pages.replaceAll { if (it.state == "processing") it.copy(state = "interrupted", error = "本页 OCR 未完成，请重新采集") else it }
-        stage = "finished"; paused.value = false; publish(result(state)); status(message, message, false)
+        stage = "finished"; paused.value = false; publish(result(state)); status(message, error, false)
     }
     private fun result(state: String = "partial") = note.copy(pages = pages.sortedBy { it.pageIndex }.toList(), comments = comments.comments.toList(), status = state,
         endReached = endReached, expandedReplyGroups = expandedGroups, unexpandedGroups = unexpandedGroups, errors = errors.distinct().toList())
@@ -255,6 +257,9 @@ internal class CaptureSessionRunner(
         val seenButtons = mutableSetOf<String>()
         for (scroll in 0 until profile.limits.maxScrolls) {
             var screen = ready()
+            if (comments.comments.isEmpty() && XiaohongshuPageGeometry.hasEmptyComments(screen.snapshot)) {
+                note = note.copy(displayedCommentCount = 0); endReached = true; break
+            }
             val new = comments.merge(CommentParser.extract(screen.snapshot, profile))
             val count = profile.find(screen.snapshot, "displayedCommentCount", false).asSequence()
                 .mapNotNull { Regex("共\\s*(\\d+)\\s*条评论").find(it.text.orEmpty())?.groupValues?.get(1)?.toIntOrNull() }.firstOrNull()
@@ -295,8 +300,8 @@ internal class CaptureSessionRunner(
             ownAction()
             val accepted = if (list.scrollable) reader.perform(profile.packageName, targetWindow, list, AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) else false
             if (!accepted) {
-                val r = list.bounds.androidRect()
-                if (!r.intersect(0, 0, width, height)) throw CaptureFailure("评论滚动区域已移出屏幕")
+                val r = XiaohongshuPageGeometry.commentScrollRegion(screen.snapshot, list)?.androidRect()
+                    ?: throw CaptureFailure("评论可滑动区域太小，请手动上滑正文、露出评论区域后继续")
                 if (!gestures.swipe(r, false, true, targetWindow)) { errors += "评论列表无法滚动"; break }
             }
             val deadline = SystemClock.elapsedRealtime() + profile.limits.actionTimeoutMs
@@ -304,6 +309,16 @@ internal class CaptureSessionRunner(
             while (SystemClock.elapsedRealtime() < deadline) {
                 delay(200); after = ready()
                 if (contentSignature(after.snapshot) != before) break
+            }
+            // A native scroll can be accepted without moving a nested list. Verify before counting no-progress.
+            if (accepted && contentSignature(after.snapshot) == before) {
+                val fresh = ready()
+                val freshList = profile.find(fresh.snapshot, profile.commentFlow.scrollContainer).firstOrNull()
+                    ?: throw CaptureFailure("评论容器已变化")
+                val region = XiaohongshuPageGeometry.commentScrollRegion(fresh.snapshot, freshList)
+                    ?: throw CaptureFailure("评论可滑动区域太小，请手动露出评论后继续")
+                if (!gestures.swipe(region.androidRect(), false, true, targetWindow)) throw CaptureFailure("系统拒绝评论滚动")
+                delay(450); after = ready()
             }
             val added = comments.merge(CommentParser.extract(after.snapshot, profile))
             val unchanged = contentSignature(after.snapshot) == before
@@ -319,6 +334,7 @@ internal class CaptureSessionRunner(
         var unchanged = 0
         repeat(10) { attempt ->
             val screen = ready()
+            if (XiaohongshuPageGeometry.hasEmptyComments(screen.snapshot)) return
             val plan = CommentEntryPlanner.plan(screen.snapshot, profile, preferCommentButton = unchanged >= 2)
             if (plan == CommentEntryPlanner.Plan.Ready) return
             status("正在进入评论区域（${attempt + 1}/10）")

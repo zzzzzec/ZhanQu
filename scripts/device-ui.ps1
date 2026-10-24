@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$Serial,
-    [ValidateSet('dump','tapText','tapContains','tapDesc','tapId','input','inputId','tap','swipe','back','enter')]
+    [ValidateSet('dump','tapText','tapContains','tapDesc','tapId','input','inputId','tap','swipe','back','enter','startPause')]
     [string]$Mode = 'dump',
     [string]$Target,
     [string]$Value,

@@ -33,7 +33,7 @@ import static org.junit.Assert.*;
 /** A separate process observes capture without restarting the app or suppressing accessibility. */
 @RunWith(AndroidJUnit4.class)
 public class ControlTest {
- private static final Set<String> ALLOWED = Set.of("com.xingin.xhs", "com.zhihu.android", "dev.zhanqu.app.devtest", "com.android.settings",
+ private static final Set<String> ALLOWED = Set.of("com.xingin.xhs", "com.zhihu.android", "tv.danmaku.bili", "dev.zhanqu.app.devtest", "com.android.settings",
      "com.google.android.documentsui", "com.android.documentsui",
      "com.google.android.permissioncontroller", "com.android.permissioncontroller");
 
@@ -49,7 +49,12 @@ public class ControlTest {
   assertTrue("Target package is outside test scope", ALLOWED.contains(target));
   String mode = args.getString("mode", "dump");
   String value = args.getString("value", "");
-  if (mode.equals("tapDesc") && target.equals("dev.zhanqu.app.devtest")) {
+  if (mode.equals("startPause")) {
+   assertEquals("Start/pause is restricted to the isolated capture app", "dev.zhanqu.app.devtest", target);
+   assertTrue("Capture start was unavailable", clickOverlayDescription("开始提取"));
+   SystemClock.sleep(150);
+   assertTrue("Capture pause was unavailable", clickOverlayDescription("暂停采集"));
+  } else if (mode.equals("tapDesc") && target.equals("dev.zhanqu.app.devtest")) {
    assertTrue("Overlay action did not become available", clickOverlayDescription(value));
   } else if (mode.equals("tapText") || mode.equals("tapContains") || mode.equals("tapDesc") || mode.equals("tapId") || mode.equals("input") || mode.equals("inputId")) {
    BySelector selector = By.pkg(target);

@@ -11,26 +11,22 @@ import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
 import dev.zhanqu.app.MainActivity
 import dev.zhanqu.app.core.ForegroundWindowPolicy
-import dev.zhanqu.app.core.BuiltInProfiles
-import dev.zhanqu.app.core.CaptureProfile
-import dev.zhanqu.app.data.NoteDatabase
-import dev.zhanqu.app.data.StoredNote
-import dev.zhanqu.app.export.NoteExporter
+import dev.zhanqu.app.core.CaptureApp
+import dev.zhanqu.app.capture.apps.xiaohongshu.XiaohongshuCaptureOptions
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
 
 /** The service is inert until the user explicitly presses Start on its own overlay. */
 class ZhanQuAccessibilityService : AccessibilityService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var reader: UiTreeReader
     private lateinit var overlay: CaptureOverlay
-    private var runner: CaptureSessionRunner? = null
+    private var runner: CaptureTask? = null
     private var captureJob: Job? = null
     private var snapshotJob: Job? = null
     private var snapshotWindowEpoch = 0L
     private var snapshotTargetPackage: String? = null
     private var snapshotTargetWindowId = -1
-    private var currentActivity: String? = null
+    private val activities = mutableMapOf<String, String>()
     private var targetPackage: String? = null
     private var targetWindowId: Int? = null
     private var ownActionUntil = 0L
@@ -44,10 +40,10 @@ class ZhanQuAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         CaptureHub.service = this
-        reader = UiTreeReader(this) { currentActivity }
+        reader = UiTreeReader(this) { reader.foregroundPackage()?.let { activities[it] } }
         overlay = CaptureOverlay(this, ::startCapture, { pauseCapture("用户暂停") }, ::resumeCapture, ::stopCapture, ::openResults, ::exportPageSnapshot)
         configureEvents(false)
-        CaptureHub.mutableState.value = CaptureUiState(connected = true, message = "打开小红书图文详情页，再在悬浮入口点击开始")
+        CaptureHub.mutableState.value = CaptureUiState(connected = true, message = "打开要采集的页面")
         scope.launch { CaptureHub.state.collect { overlay.update(it) } }
         val filter = IntentFilter(Intent.ACTION_SCREEN_OFF)
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -58,48 +54,65 @@ class ZhanQuAccessibilityService : AccessibilityService() {
     private fun configureEvents(running: Boolean) {
         serviceInfo = serviceInfo.apply {
             eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or AccessibilityEvent.TYPE_WINDOWS_CHANGED or
-                AccessibilityEvent.TYPE_VIEW_SCROLLED or AccessibilityEvent.TYPE_VIEW_CLICKED or
-                AccessibilityEvent.TYPE_TOUCH_INTERACTION_START
+                (if (running) AccessibilityEvent.TYPE_VIEW_SCROLLED or AccessibilityEvent.TYPE_VIEW_CLICKED or
+                    AccessibilityEvent.TYPE_TOUCH_INTERACTION_START else 0)
             // Comment parent/reply rows use structural containers which Android may otherwise prune.
             flags = flags or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
                 AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
-            // Window-change events from other packages are required only while a user-owned session is active.
-            packageNames = if (running) null else arrayOf("com.xingin.xhs", packageName)
+            // Idle detection reads foreground package metadata only, never a page snapshot or content.
+            // All packages are needed to clear stale detection when leaving a supported app.
+            packageNames = null
             notificationTimeout = 100
         }
     }
     fun showControls() = showControls(true)
     private fun showControls(expanded: Boolean) {
         if (!::overlay.isInitialized) return
+        detectForegroundApp()
         runCatching { overlay.show(expanded) }.onFailure {
             CaptureHub.mutableState.value = CaptureHub.mutableState.value.copy(error = "系统未允许无障碍悬浮入口，请重新连接无障碍服务", message = "悬浮入口不可用")
         }
     }
     fun hideControls() { if (::overlay.isInitialized) overlay.hide() }
-    private fun markOwnAction() { ownActionUntil = SystemClock.uptimeMillis() + 1300L }
-    private fun startCapture(options: CaptureOptions) {
-        if (snapshotJob?.let { !it.isCompleted } == true || captureJob?.let { !it.isCompleted } == true || (!options.images && !options.comments)) return
+    private fun markOwnAction() { ownActionUntil = SystemClock.uptimeMillis() + 3000L }
+    private fun detectForegroundApp() {
+        if (captureJob?.let { !it.isCompleted } == true || snapshotJob?.let { !it.isCompleted } == true) return
+        val app = CaptureApp.detect(reader.foregroundPackage())
+        val state = CaptureHub.mutableState.value
+        if (state.detectedApp == app) return
+        CaptureHub.mutableState.value = CaptureUiState(connected = true, detectedApp = app,
+            message = when (app) {
+                CaptureApp.XIAOHONGSHU -> "小红书图文"
+                CaptureApp.ZHIHU -> "知乎回答"
+                CaptureApp.BILIBILI -> "B站视频"
+                null -> "打开要采集的页面"
+            })
+    }
+    private fun startCapture(options: XiaohongshuCaptureOptions) {
+        if (snapshotJob?.let { !it.isCompleted } == true || captureJob?.let { !it.isCompleted } == true) return
         if (!getSharedPreferences("privacy", Context.MODE_PRIVATE).getBoolean("disclosure", false)) {
             CaptureHub.mutableState.value = CaptureUiState(connected = true, message = "请先在粘取首页阅读并同意无障碍用途与隐私说明")
             openResults()
             return
         }
-        val profile = BuiltInProfiles.xiaohongshu()
-        if (reader.foregroundPackage() != profile.packageName) {
-            CaptureHub.mutableState.value = CaptureUiState(connected = true, message = "请先打开小红书图文笔记详情页，再点击开始", error = "当前应用不在允许名单")
+        // Resolve again on Start; an overlay label is never trusted as the action target.
+        val app = CaptureApp.detect(reader.foregroundPackage())
+        if (app == null) {
+            CaptureHub.mutableState.value = CaptureUiState(connected = true, message = "打开要采集的页面", error = "暂不支持当前应用")
             return
         }
-        targetPackage = profile.packageName
+        if (app == CaptureApp.XIAOHONGSHU && !options.images && !options.comments) return
+        targetPackage = app.packageName
         targetWindowId = reader.foregroundWindowId()
         configureEvents(true)
         CaptureHub.mutableResult.value = null
-        val newRunner = CaptureSessionRunner(profile, reader, GestureController(this, ::markOwnAction) { hidden -> overlay.temporarilyHide(hidden) },
+        val newRunner = CaptureTaskFactory(reader, GestureController(this, ::markOwnAction) { hidden -> overlay.temporarilyHide(hidden) },
             ScreenshotProvider(this) { hidden -> overlay.temporarilyHide(hidden) }, ::markOwnAction,
-            { state -> if (!destroyed) CaptureHub.mutableState.value = state.copy(error = CaptureHub.storageError.value ?: state.error) },
-            { note -> if (!destroyed) CaptureHub.mutableResult.value = note; CapturePersistence.enqueue(applicationContext, note) })
+            { state -> if (!destroyed) CaptureHub.mutableState.value = state.copy(detectedApp = app, error = CaptureHub.storageError.value ?: state.error) },
+            { note -> if (!destroyed) CaptureHub.mutableResult.value = note; CapturePersistence.enqueue(applicationContext, note) }).create(app, options)
         runner = newRunner
         captureJob = scope.launch {
-            try { newRunner.run(options) }
+            try { newRunner.run() }
             finally { runner = null; targetPackage = null; targetWindowId = null; if (!destroyed) configureEvents(false) }
         }
     }
@@ -159,12 +172,13 @@ class ZhanQuAccessibilityService : AccessibilityService() {
     }
     fun stopCapture() {
         if (captureJob?.let { !it.isCompleted } != true) return
-        CaptureHub.mutableState.value = CaptureHub.mutableState.value.copy(message = "正在结束；等待正在处理的 OCR 完成并保存", stage = "stopping")
+        CaptureHub.mutableState.value = CaptureHub.mutableState.value.copy(message = "正在保存", stage = "stopping")
         captureJob?.cancel(CancellationException("User stopped capture"))
     }
     private fun openResults() {
         pauseCapture("已打开粘取，请回到原页面后手动继续")
-        startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+        // Settings may be above MainActivity in our task after granting accessibility access.
+        startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
     }
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
@@ -182,10 +196,11 @@ class ZhanQuAccessibilityService : AccessibilityService() {
         val snapshotPackage = snapshotTargetPackage
         if (snapshotJob?.isActive == true && snapshotPackage != null && (windowStateEvent || windowsEvent) &&
             changedTarget(snapshotPackage, snapshotTargetWindowId)) snapshotWindowEpoch++
-        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg == "com.xingin.xhs") {
+        if (windowStateEvent && pkg != null && CaptureApp.detect(pkg) != null) {
             val className = event.className?.toString()
-            if (className?.endsWith("Activity") == true) currentActivity = className
+            if (className?.endsWith("Activity") == true) activities[pkg] = className
         }
+        if (windowStateEvent || windowsEvent) detectForegroundApp()
         if (captureJob?.isActive != true) return
         val capturePackage = targetPackage
         val captureWindow = targetWindowId
@@ -195,7 +210,7 @@ class ZhanQuAccessibilityService : AccessibilityService() {
         }
         if (event.eventType == AccessibilityEvent.TYPE_TOUCH_INTERACTION_START) {
             pauseCapture("检测到触摸操作，已暂停；确认页面后手动继续")
-        } else if (pkg != packageName && SystemClock.uptimeMillis() > ownActionUntil &&
+        } else if (pkg != packageName && event.eventTime > ownActionUntil &&
             (event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED || event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED)) {
             pauseCapture("检测到非采集操作，已暂停；确认页面后手动继续")
         }

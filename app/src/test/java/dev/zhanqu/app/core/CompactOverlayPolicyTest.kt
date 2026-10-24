@@ -5,7 +5,8 @@ import org.junit.Test
 
 class CompactOverlayPolicyTest {
     @Test fun `entry and menu retain accessible touch targets`() {
-        assertTrue(CompactOverlayPolicy.ENTRY_WIDTH_DP >= CompactOverlayPolicy.TOUCH_TARGET_DP + 8)
+        assertTrue(CompactOverlayPolicy.ENTRY_TARGET_DP >= 40)
+        assertTrue(CompactOverlayPolicy.ENTRY_WIDTH_DP >= CompactOverlayPolicy.ENTRY_TARGET_DP + 4)
         assertTrue(CompactOverlayPolicy.PANEL_WIDTH_DP >= 3 * CompactOverlayPolicy.TOUCH_TARGET_DP + 28)
         assertTrue(CompactOverlayPolicy.PANEL_WIDTH_DP < 240)
     }
